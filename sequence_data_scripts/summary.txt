@@ -1,0 +1,11 @@
+PASS	Basic Statistics	Glen-Drummond-Dragon_GTGAAA_L005_R1_001.fastq.gz
+PASS	Per base sequence quality	Glen-Drummond-Dragon_GTGAAA_L005_R1_001.fastq.gz
+PASS	Per sequence quality scores	Glen-Drummond-Dragon_GTGAAA_L005_R1_001.fastq.gz
+WARN	Per base sequence content	Glen-Drummond-Dragon_GTGAAA_L005_R1_001.fastq.gz
+PASS	Per base GC content	Glen-Drummond-Dragon_GTGAAA_L005_R1_001.fastq.gz
+PASS	Per sequence GC content	Glen-Drummond-Dragon_GTGAAA_L005_R1_001.fastq.gz
+PASS	Per base N content	Glen-Drummond-Dragon_GTGAAA_L005_R1_001.fastq.gz
+PASS	Sequence Length Distribution	Glen-Drummond-Dragon_GTGAAA_L005_R1_001.fastq.gz
+PASS	Sequence Duplication Levels	Glen-Drummond-Dragon_GTGAAA_L005_R1_001.fastq.gz
+PASS	Overrepresented sequences	Glen-Drummond-Dragon_GTGAAA_L005_R1_001.fastq.gz
+WARN	Kmer Content	Glen-Drummond-Dragon_GTGAAA_L005_R1_001.fastq.gz
