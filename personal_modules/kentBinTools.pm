@@ -4,6 +4,11 @@
 
 package kentBinTools;
 
+sub new {
+	my $class = shift();
+	return bless {}, $class;
+}
+
 sub most {
 	my($a, $b) = @_;
 	return ($a > $b)? $a : $b;

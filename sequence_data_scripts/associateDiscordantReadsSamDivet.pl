@@ -27,7 +27,7 @@ while(my $line = <BED>){
 	$storage->addBed($line);
 }
 close BED;
-print 
+print STDERR "Finished loading bed file...\n"; 
 
 # Now, check the context of the file input and begin the association
 if(defined($opts{'s'})){
@@ -82,8 +82,8 @@ has 'chr' => (is => 'ro', isa => 'Str');
 has ['start', 'end'] => (is => 'ro', isa => 'Int');
 has 'count' => (
 	traits => ['Counter'],
-	is => rw,
-	isa => 'Num',
+	is => 'rw',
+	isa => 'Int',
 	default => 0,
 	handles => {
 		inc_bed => 'inc',
@@ -98,12 +98,11 @@ __PACKAGE__->meta->make_immutable;
 
 package bedStoreCounter;
 use Mouse;
-use bedCount;
 use namespace::autoclean;
 use kentBinTools;
 
 has 'storage' => (
-	traits => ['Hash']
+	traits => ['Hash'],
 	is => 'rw',
 	isa => 'HashRef[HashRef[ArrayRef[bedCount]]]',
 	default => sub{{}},
@@ -116,6 +115,9 @@ has 'storage' => (
 sub addBed{
 	my ($self, $line) = @_;
 	my @segs = split(/\t/, $line);
+	if(scalar(@segs) < 3){
+		return;
+	}
 	my $kent = kentBinTools->new();
 	my $bin = $kent->getbin($segs[1], $segs[2]);
 	
@@ -149,7 +151,7 @@ sub printOut{
 	my ($self) = @_;
 	my $href = $self->storage();
 	foreach my $chr (sort{$a cmp $b} keys(%{$href})){
-		foreach my $b (sort{$a <=> $b} keys(%{$href->{$chr}}){
+		foreach my $b (sort{$a <=> $b} keys(%{$href->{$chr}})){
 			foreach my $bed (@{$href->{$chr}->{$b}}){
 				print $bed->retString() . "\n";
 			}
