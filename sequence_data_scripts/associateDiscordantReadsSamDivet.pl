@@ -132,6 +132,7 @@ sub searchIncrement{
 	my ($self, $chr, $start, $end) = @_;
 	my $kent = kentBinTools->new();
 	my $href = $self->storage();
+	if(!defined($start) || ! defined($end)){return;}
 	my $vlen = $end - $start;
 	if(exists($href->{$chr})){
 		my @bins = $kent->searchbins($start, $end);

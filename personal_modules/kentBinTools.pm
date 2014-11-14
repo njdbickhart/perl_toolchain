@@ -10,16 +10,16 @@ sub new {
 }
 
 sub most {
-	my($a, $b) = @_;
+	my($self, $a, $b) = @_;
 	return ($a > $b)? $a : $b;
 }
 sub least {
-	my ($a, $b) = @_;
+	my ($self, $a, $b) = @_;
 	return ($a < $b) ? $a : $b;
 }
 sub overlap {
 	my ($self, $s1, $e1, $s2, $e2) = @_;
-	return (least($e1, $e2) - most($s1, $s2));
+	return ($self->least($e1, $e2) - $self->most($s1, $s2));
 }
 sub searchbins{
 	my ($self, $start, $end) = @_;
