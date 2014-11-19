@@ -142,9 +142,12 @@ sub cigarChanger{
 		# Go through the cigar groups backwards in order to subtract elements
 		$matches[$x] =~ /(\d+)[MISD]/;
 		my $c = $1;
-		if($c > $lendiff){
-			$matches[$x] =~ /\d+([MISD])/;
-			my $h = $1;
+		$matches[$x] =~ /\d+([MISD])/;
+		my $h = $1;
+		if($h eq 'D' && $lendiff > 0){
+			# This was the source of a bug -- the deletions were causing my cigars to screw up
+			$matches[$x] = "";
+		}elsif($c > $lendiff){			
 			$matches[$x] = ($c - $lendiff) . $h;
 			last;
 		}else{
@@ -160,6 +163,7 @@ sub debugCigarCounter{
 	my @matches = $cigar =~ /(\d+[MISD])/g;
 	my $ccount = 0;
 	foreach my $m (@matches){
+		if($m =~ m/.+D/){next;}
 		$m =~ /(\d+)[MISD]/;
 		$ccount += $1;
 	}
