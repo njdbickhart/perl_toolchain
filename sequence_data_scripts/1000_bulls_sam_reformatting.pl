@@ -19,7 +19,7 @@ my $usage = "perl $0 -i <list of input bam file locations> -o <base output direc
 	1. file location
 	2. official animal name\n";
 	
-getops('iot', \%opts);
+getopt('iot', \%opts);
 
 unless(defined($opts{'i'}) && defined($opts{'o'}) && defined($opts{'t'})){
 	print $usage;
@@ -27,6 +27,11 @@ unless(defined($opts{'i'}) && defined($opts{'o'}) && defined($opts{'t'})){
 }
 
 my $threads = $opts{'t'};
+my $debug = 0;
+if(defined($opts{'d'})){
+	$debug = 1;
+}
+
 
 my $num = 0;
 open(LIST, "< $opts{i}") || die "Could not open list file!\n$usage";
@@ -83,6 +88,11 @@ sub processBamFile{
 			next;
 		}else{
 			# Now, check the average quality score
+			if($debug){
+				unless(debugCigarCounter($segs[5], $segs[9])){
+					print "Preliminary problem with: " . join("\t", @segs) . "\n";
+				}
+			}
 			my $avgqs = getAvgQS($segs[10]);
 			if($avgqs < 20){
 				next;
@@ -94,8 +104,18 @@ sub processBamFile{
 				}
 				if(length($tseq) != length($segs[9])){
 					# Now we need to modify the cigar before proceeding
+					if($debug){
+						unless(debugCigarCounter($segs[5], $tseq)){
+							print "PostTrim problem with: " . join("\t", @segs) . "\n";
+						}
+					}
 					my $tcigar = cigarChanger($segs[5], length($segs[9]) - length($tseq));
-					$segs[4] = $tcigar;
+					$segs[5] = $tcigar;
+				}
+				if($debug){
+					unless(debugCigarCounter($segs[5], $tseq)){
+						print "PostCigar problem with: " . join("\t", @segs) . "\n";
+					}
 				}
 				$segs[9] = $tseq;
 				$segs[10] = $tqs;
@@ -120,9 +140,11 @@ sub cigarChanger{
 	my @matches = $cigar =~ /(\d+[MISD])/g;
 	for(my $x = scalar(@matches) -1; $x >= 0; $x--){
 		# Go through the cigar groups backwards in order to subtract elements
-		my $c = $matches[$x] =~ /(\d+)[MISD]/;
+		$matches[$x] =~ /(\d+)[MISD]/;
+		my $c = $1;
 		if($c > $lendiff){
-			my $h = $matches[$x] =~ /\d+([MISD])/;
+			$matches[$x] =~ /\d+([MISD])/;
+			my $h = $1;
 			$matches[$x] = ($c - $lendiff) . $h;
 			last;
 		}else{
@@ -131,6 +153,20 @@ sub cigarChanger{
 		}
 	}
 	return join("", @matches);
+}
+
+sub debugCigarCounter{
+	my ($cigar, $seq) = @_;
+	my @matches = $cigar =~ /(\d+[MISD])/g;
+	my $ccount = 0;
+	foreach my $m (@matches){
+		$m =~ /(\d+)[MISD]/;
+		$ccount += $1;
+	}
+	unless($ccount == length($seq)){
+		return 0;
+	}
+	return 1;
 }
 
 sub threePrimeTrimmer{
