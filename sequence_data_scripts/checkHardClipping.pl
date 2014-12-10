@@ -17,6 +17,7 @@ unless(defined($opts{'i'}) && defined($opts{'b'})){
 # Read in bed file and create samtools search for each entry
 open(IN, "< $opts{i}") || die "Could not open bed file!\n$usage";
 open(OUT, "> $opts{o}");
+print OUT "snpname\tclipstart\tclipend\tregstart\tregend\n";
 while(my $line = <IN>){
 	chomp $line;
 	my @segs = split(/\t/, $line);
@@ -57,7 +58,7 @@ sub concordance{
 	my @output;
 	foreach my $row (@{$array}){
 		
-		if($row->[1] == 0 && $row->[2] == 0 && $neg == 0 && $row->[0] < ($end - ($len * 0.5)) && $row->[3] > ($start - ($len * 0.5))){
+		if($row->[0] == 0 && $row->[1] == 0 && $neg == 0 && $row->[2] < ($end - ($len * 0.5)) && $row->[3] > ($start - ($len * 0.5))){
 			# There were no hard/softclipped bases and the region overlapped with the predicted start and end position by 50%
 			my $str = outStr($row, $name);
 			push(@output, $str);
@@ -89,24 +90,25 @@ sub outStr{
 
 sub determineLength{
 	my ($pos, $cigar) = @_;
-	my $s1 = $pos;
+	my $e1 = $pos;
 	my ($s2, $e1, $e2);
 	$s2 = 0;
 	$e1 = 0;
 	$e2 = 0;
 	
+	# I'm going to make $s1 and $s2 the hard/softclip bed locs
 	my $current = $pos;
 	for(my $x = 0; $x < $cigar->num(); $x++){
 		my $t = $cigar->get_tag($x);
 		my $v = $cigar->get_value($x);
 		if($t eq 'S' || $t eq 'H'){
-			if($s2 == 0){
-				$s2 = $current;
-			}
-			$e1 = $current + $v;
+			$s1 = $current;
+			$s2 = $current + $v;
+		}else{
+			$e2 = $current;
 		}
 		$current += $v;
-		$e2 = $current;
+		
 	}
 	return ($s1, $s2, $e1, $e2);
 }
