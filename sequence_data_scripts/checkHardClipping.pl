@@ -91,7 +91,7 @@ sub outStr{
 sub determineLength{
 	my ($pos, $cigar) = @_;
 	my $e1 = $pos;
-	my ($s2, $e1, $e2);
+	my ($s2, $s1, $e2);
 	$s2 = 0;
 	$e1 = 0;
 	$e2 = 0;
