@@ -93,7 +93,7 @@ sub determineLength{
 	my $e1 = $pos;
 	my ($s2, $s1, $e2);
 	$s2 = 0;
-	$e1 = 0;
+	$s1 = 0;
 	$e2 = 0;
 	
 	# I'm going to make $s1 and $s2 the hard/softclip bed locs
