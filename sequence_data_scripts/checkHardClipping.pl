@@ -29,7 +29,7 @@ while(my $line = <IN>){
 		my $cigar = Cigar->new();
 		$cigar->populateCigar($ssegs[5]);
 		
-		my($s1, $s2, $e1, $e2) = determineLength($segs[3], $cigar);
+		my($s1, $s2, $e1, $e2) = determineLength($ssegs[3], $cigar);
 		push(@positions, [$s1, $s2, $e1, $e2]);
 	}
 	close SAM;
