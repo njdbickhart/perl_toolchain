@@ -104,8 +104,12 @@ sub determineLength{
 		if($t eq 'S' || $t eq 'H'){
 			$s1 = $current;
 			$s2 = $current + $v;
+			if($x == 0){
+				# The first part of the read was bookended by a hard clip
+				$e1 = $current + $v;
+			}
 		}else{
-			$e2 = $current;
+			$e2 = $current + $v;
 		}
 		$current += $v;
 		
