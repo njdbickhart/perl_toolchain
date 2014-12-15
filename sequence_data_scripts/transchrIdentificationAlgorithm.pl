@@ -100,7 +100,7 @@ sub processRead{
 	my ($leastchr, $mostchr) = ($segs->[1] lt $segs->[5])? ($segs->[1], $segs->[5]) : ($segs->[5], $segs->[1]);
 	my ($leaststart, $moststart) = ($segs->[1] eq $leastchr)? ($segs->[2], $segs->[6]) : ($segs->[6], $segs->[2]);
 	my ($leastend, $mostend) = ($segs->[1] eq $leastchr) ? ($segs->[3], $segs->[7]) : ($segs->[7], $segs->[3]);
-	my $bin = binner->getbin($leaststart, $leastend);
+	my $bin = $binner->getbin($leaststart, $leastend);
 	
 	if(!exists($beds->chr()->{$leastchr})){
 		$beds->chr($leastchr, binbed->new());
@@ -111,7 +111,7 @@ sub processRead{
 		return;
 	}
 	
-	my $searchbins = binner->searchbins($leaststart, $leastend);
+	my $searchbins = $binner->searchbins($leaststart, $leastend);
 	my $found = 0;
 	foreach my $b (@{$beds->chr($leastchr)->bin()->{$bin}}){
 		if($b->chr2 ne $mostchr){next;}
