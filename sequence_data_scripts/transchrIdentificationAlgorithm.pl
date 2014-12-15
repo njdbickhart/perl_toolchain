@@ -55,6 +55,7 @@ while (my $line = <IN>){
 		$last = $segs[0];
 	}else{
 		push(@store, \@segs);
+		$last = $segs[0];
 	}
 	$linenum++;
 	if($linenum % 100000 == 0){
