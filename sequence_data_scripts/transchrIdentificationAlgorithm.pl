@@ -40,6 +40,7 @@ my $beds = bed->new();
 open(IN, "grep \'transchr\' $opts{d} |") || die "Could not open divet file!\n";
 my $last = "none";
 my @store;
+my $linenum = 0;
 while (my $line = <IN>){
 	chomp $line;
 	my @segs = split(/\t/, $line);
@@ -55,7 +56,12 @@ while (my $line = <IN>){
 	}else{
 		push(@store, \@segs);
 	}
+	$linenum++;
+	if($linenum % 100000 == 0){
+		print STDERR "Finished with line:\t $linenum\r";
+	}
 }
+print STDERR "\n";
 
 close IN;
 open(OUT, "> $opts{o}");
@@ -77,8 +83,8 @@ foreach my $chr (sort {my ($x) = $a =~ /chr(.+)/;
 				$y = 502;
 			}
 			$x <=> $y} keys(%{$beds->chr})){
-			foreach my $bin (sort{$a <=> $b} keys(%{$beds->chr($chr)})){
-				foreach my $row (sort {$a->start1 <=> $b->start1} @{$beds->chr($chr)->bin($bin)}){
+			foreach my $bin (sort{$a <=> $b} keys(%{$beds->chr()->{$chr}})){
+				foreach my $row (sort {$a->start1 <=> $b->start1} @{$beds->chr($chr)->bin()->{$bin}}){
 					print OUT $row->chr1 . "\t" . $row->start1 . "\t" . $row->end1 . "\t" . $row->chr2 . "\t";
 					print OUT $row->start2 . "\t" . $row->end2 . "\t" . $row->support . "\n";
 				}
@@ -106,7 +112,7 @@ sub processRead{
 	
 	my $searchbins = binner->searchbins($leaststart, $leastend);
 	my $found = 0;
-	foreach my $b (@{$beds->chr($leastchr)->bin($bin)}){
+	foreach my $b (@{$beds->chr($leastchr)->bin()->{$bin}}){
 		if($b->chr2 ne $mostchr){next;}
 		my $overlap1 = $binner->overlap($b->start1, $b->end1, $leaststart, $leastend);
 		my $overlap2 = $binner->overlap($b->start2, $b->end2, $moststart, $mostend);
@@ -119,7 +125,7 @@ sub processRead{
 		}
 	}
 	if(!$found){
-		push(@{$beds->chr($leastchr)->bin($bin)}, createBed($leastchr, $leaststart, $leastend, $mostchr, $moststart, $mostend));
+		push(@{$beds->chr($leastchr)->bin()->{$bin}}, createBed($leastchr, $leaststart, $leastend, $mostchr, $moststart, $mostend));
 	}
 }
 
