@@ -84,7 +84,7 @@ foreach my $chr (sort {my ($x) = $a =~ /chr(.+)/;
 				$y = 502;
 			}
 			$x <=> $y} keys(%{$beds->chr})){
-			foreach my $bin (sort{$a <=> $b} keys(%{$beds->chr()->{$chr}})){
+			foreach my $bin (sort{$a <=> $b} keys(%{$beds->chr($chr)->bin})){
 				foreach my $row (sort {$a->start1 <=> $b->start1} @{$beds->chr($chr)->bin()->{$bin}}){
 					print OUT $row->chr1 . "\t" . $row->start1 . "\t" . $row->end1 . "\t" . $row->chr2 . "\t";
 					print OUT $row->start2 . "\t" . $row->end2 . "\t" . $row->support . "\n";
