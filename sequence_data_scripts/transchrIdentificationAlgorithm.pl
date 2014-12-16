@@ -48,7 +48,7 @@ while (my $line = <IN>){
 		# The read name has changed, so there are likely no more alternative mappings
 		if(scalar(@store) == 1){
 			# There is only one mapping, process this position
-			processRead($beds, \@segs, $binner);
+			processRead($beds, $store[0], $binner);
 		}
 		@store = ();
 		push(@store, \@segs);
