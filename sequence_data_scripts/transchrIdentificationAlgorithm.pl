@@ -111,7 +111,7 @@ sub processRead{
 		return;
 	}
 	
-	my $searchbins = $binner->searchbins($leaststart, $leastend);
+	#my @searchbins = $binner->searchbins($leaststart, $leastend);
 	my $found = 0;
 	foreach my $b (@{$beds->chr($leastchr)->bin()->{$bin}}){
 		if($b->chr2 ne $mostchr){next;}
