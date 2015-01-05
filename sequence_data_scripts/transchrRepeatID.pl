@@ -40,9 +40,7 @@ open(IN, "< $opts{f}") || die "Could not open repeat bed file!\n";
 while(my $line = <IN>){
 	chomp $line;
 	my @segs = split(/\t/, $line);
-	if($segs[3] < 3){
-		next;
-	}
+	
 	my $bin = $binner->getbin($segs[1], $segs[2]);
 	if(!exists($beds->chr()->{$segs[0]})){
 		$beds->chr($segs[0], binbed->new());
@@ -54,6 +52,10 @@ while(my $line = <IN>){
 }
 
 close IN;
+
+print STDERR "Done with repeats file loading\n";
+
+my $linenum = 0;
 
 # Now process transchr file to remove entries that overlap likely repeats
 open(IN, "< $opts{d}") || die "Could not open input file!\n";
@@ -113,7 +115,12 @@ while(my $line = <IN>){
 		
 		system("rm comp.bed tmp.bed");
 	}
+	$linenum++;
+	if($linenum % 10000 == 0){
+		print STDERR "$linenum\r";
+	}
 }
+print STDERR "\n";
 
 close OUT;
 close IN;
