@@ -48,7 +48,7 @@ while(my $line = <IN>){
 	if(!exists($beds->chr($segs[0])->bin()->{$bin})){
 		$beds->chr($segs[0])->bin($bin, []);
 	}
-	push(@{$beds->chr($segs[0])->bin()->{$bin}}, simpbed->new('start' => $segs[1], 'end' => $segs[2], 'name' => $segs[3]);
+	push(@{$beds->chr($segs[0])->bin()->{$bin}}, simpbed->new('start' => $segs[1], 'end' => $segs[2], 'name' => $segs[3]));
 }
 
 close IN;
