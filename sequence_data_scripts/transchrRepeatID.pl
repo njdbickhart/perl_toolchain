@@ -73,7 +73,7 @@ while(my $line = <IN>){
 	foreach my $b (@searchbins1){
 		if(!exists($beds->chr($segs[0])->bin()->{$b})){next;}
 		foreach my $bed (@{$beds->chr($segs[0])->bin()->{$b}}){
-			if($binner->overlap($segs[1], $segs[2], $bed->start(), $bed->end())){
+			if($binner->overlap($segs[1], $segs[2], $bed->start(), $bed->end()) > 1){
 				$found1 = 1;
 				$names{$bed->name()} = 1;
 			}
@@ -83,7 +83,7 @@ while(my $line = <IN>){
 	foreach my $b (@searchbins2){
 		if(!exists($beds->chr($segs[0])->bin()->{$b})){next;}
 		foreach my $bed (@{$beds->chr($segs[3])->bin()->{$b}}){
-			if($binner->overlap($segs[4], $segs[5], $bed->start(), $bed->end())){
+			if($binner->overlap($segs[4], $segs[5], $bed->start(), $bed->end()) > 1){
 				$found2 = 1;
 				$names{$bed->name()} = 1;
 			}
