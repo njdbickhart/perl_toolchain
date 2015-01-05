@@ -100,11 +100,15 @@ while(my $line = <IN>){
 		my @bins = ($found1)? @searchbins2 : @searchbins1;
 		my @names = keys(%names);
 		
+		my $fchr = ($found1)? $segs[3] : $segs[0];
+		my $fstart = ($found1)? $segs[1] : $segs[4];
+		my $fend = ($found1)? $segs[2] : $segs[5];
+		
 		foreach my $b (@bins){
 			$binstore{$tchr}->{$b} = 1;
 		}
 		
-		print COMP "$segs[0]\t$tstart\t$tend\t$segs[6]\n";
+		print COMP "$segs[0]\t$tstart\t$tend\t$fchr:$fstart-$fend;$segs[6]\n";
 		
 		
 		
@@ -126,6 +130,7 @@ close COMP;
 
 open(BED, "closestBed -a comp.bed -b tmp.bed -d |") || die "Could not use closestBed on data!\n";
 while(my $l = <BED>){
+	chomp $l;
 	my @bsegs = split(/\t/, $l);
 	if($bsegs[-1] >= 1000){
 		# In this case, the repeat is too far away from the anchor read to have been there
