@@ -88,8 +88,30 @@ while(my $line = <IN>){
 		}
 	}
 	
-	if(!(!$found1 && !$found2) && scalar(keys(%names)) <= 2){
-		print OUT join("\t", @segs) . "\n";
+	if(!(!$found1 && !$found2) && ($found1 || $found2) && !($found1 && $found2) && scalar(keys(%names)) <= 1){
+		# We need to find the end that did not match the repeat
+		my $tstart = ($found1)? $segs[4] : $segs[1];
+		my $tend = ($found1)? $segs[5] : $segs[2];
+		my @bins = ($found1)? @searchbins2 : @searchbins1;
+		my @names = keys(%names);
+		createBedTempFile("tmp.bed", $names[0], $segs[0], \@bins, $beds);
+		
+		open(COMP, "> comp.bed");
+		print COMP "$segs[0]\t$tstart\t$tend\t$names[0]\n";
+		close COMP;
+		
+		open(BED, "closestBed -a comp.bed -b tmp.bed -d |") || die "Could not use closestBed on data!\n";
+		while(my $l = <BED>){
+			my @bsegs = split(/\t/, $l);
+			if($bsegs[-1] >= 1000){
+				# In this case, the repeat is too far away from the anchor read to have been there
+				# before.
+				print OUT join("\t", @segs) . "\n";
+			}		
+		}
+		close BED;
+		
+		system("rm comp.bed tmp.bed");
 	}
 }
 
@@ -97,3 +119,25 @@ close OUT;
 close IN;
 
 exit;
+
+# Given the name of a repeat, print out only the repeat bed coords within the bins that have the given name
+sub createBedTempFile{
+	my ($tmpfile, $repeat, $chr, $bins, $beds) = @_;
+	
+	my @store;
+	foreach my $b (@{$bins}){
+		if(!exists($beds->chr($chr)->bin()->{$b})){next;}
+		foreach my $bed (@{$beds->chr($chr)->bin()->{$b}}){
+			if($bed->name eq $repeat){
+				push(@store, [$chr, $bed->start, $bed->end, $bed->name]);
+			}
+		}
+	}
+	@store = sort{$a->[1] <=> $b->[1]} @store;
+	
+	open(TMP, "> $tmpfile");
+	foreach my $s (@store){
+		print TMP join("\t", @{$s}) . "\n";
+	}
+	close TMP;
+}
