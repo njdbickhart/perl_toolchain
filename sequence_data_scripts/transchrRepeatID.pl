@@ -56,6 +56,8 @@ close IN;
 print STDERR "Done with repeats file loading\n";
 
 my $linenum = 0;
+my %binstore;
+open(COMP, "> comp.bed");
 
 # Now process transchr file to remove entries that overlap likely repeats
 open(IN, "< $opts{d}") || die "Could not open input file!\n";
@@ -90,30 +92,24 @@ while(my $line = <IN>){
 		}
 	}
 	
-	if(!(!$found1 && !$found2) && ($found1 || $found2) && !($found1 && $found2) && scalar(keys(%names)) <= 1){
+	if(!(!$found1 && !$found2) && ($found1 || $found2) && !($found1 && $found2) && scalar(keys(%names)) <= 1 && $segs[6] > 2){
 		# We need to find the end that did not match the repeat
+		my $tchr = ($found1)? $segs[0] : $segs[3];
 		my $tstart = ($found1)? $segs[4] : $segs[1];
 		my $tend = ($found1)? $segs[5] : $segs[2];
 		my @bins = ($found1)? @searchbins2 : @searchbins1;
 		my @names = keys(%names);
-		createBedTempFile("tmp.bed", $names[0], $segs[0], \@bins, $beds);
 		
-		open(COMP, "> comp.bed");
-		print COMP "$segs[0]\t$tstart\t$tend\t$names[0]\n";
-		close COMP;
-		
-		open(BED, "closestBed -a comp.bed -b tmp.bed -d |") || die "Could not use closestBed on data!\n";
-		while(my $l = <BED>){
-			my @bsegs = split(/\t/, $l);
-			if($bsegs[-1] >= 1000){
-				# In this case, the repeat is too far away from the anchor read to have been there
-				# before.
-				print OUT join("\t", @segs) . "\n";
-			}		
+		foreach my $b (@bins){
+			$binstore{$tchr}->{$b} = 1;
 		}
-		close BED;
 		
-		system("rm comp.bed tmp.bed");
+		print COMP "$segs[0]\t$tstart\t$tend\t$segs[6]\n";
+		
+		
+		
+		
+		#system("rm comp.bed tmp.bed");
 	}
 	$linenum++;
 	if($linenum % 10000 == 0){
@@ -121,6 +117,23 @@ while(my $line = <IN>){
 	}
 }
 print STDERR "\n";
+
+foreach my $chr (keys(%binstore)){
+	my @keys = keys(%{$binstore{$chr}});
+	createBedTempFile("tmp.bed", "test", $chr, \@keys, $beds);
+}
+close COMP;
+
+open(BED, "closestBed -a comp.bed -b tmp.bed -d |") || die "Could not use closestBed on data!\n";
+while(my $l = <BED>){
+	my @bsegs = split(/\t/, $l);
+	if($bsegs[-1] >= 1000){
+		# In this case, the repeat is too far away from the anchor read to have been there
+		# before.
+		print OUT join("\t", @bsegs) . "\n";
+	}		
+}
+close BED;
 
 close OUT;
 close IN;
@@ -135,14 +148,14 @@ sub createBedTempFile{
 	foreach my $b (@{$bins}){
 		if(!exists($beds->chr($chr)->bin()->{$b})){next;}
 		foreach my $bed (@{$beds->chr($chr)->bin()->{$b}}){
-			if($bed->name eq $repeat){
+			#if($bed->name eq $repeat){
 				push(@store, [$chr, $bed->start, $bed->end, $bed->name]);
-			}
+			#}
 		}
 	}
 	@store = sort{$a->[1] <=> $b->[1]} @store;
 	
-	open(TMP, "> $tmpfile");
+	open(TMP, ">> $tmpfile");
 	foreach my $s (@store){
 		print TMP join("\t", @{$s}) . "\n";
 	}
