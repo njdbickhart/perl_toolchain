@@ -85,7 +85,7 @@ sub concatBCFtoVCF{
 	my $bcfstr = join(' ', @bcfs);
 	if($ishts){
 		system("bcftools concat -o $mergebcf -O b $bcfstr");
-		system("bcftools filter -O u -o $vcf -s LOWQUAL -i \'%QUAL>10\' $mergebcf");
+		system("bcftools filter -O v -o $vcf -s LOWQUAL -i \'%QUAL>10\' $mergebcf");
 	}else{
 		system("bcftools cat $bcfstr > $mergebcf");
 		system("bcftools view $mergebcf | vcfutils.pl varFilter -D100 > $vcf");
