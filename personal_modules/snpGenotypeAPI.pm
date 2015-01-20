@@ -7,10 +7,23 @@ use namespace::autoclean;
 use strict;
 
 sub printOutPedMap{
-	my($self, $genotypearray, $baseoutname, $genokey) = @_;
+	my($self, $genotypearray, $baseoutname, $gender, $genokey) = @_;
 	open(MAP, "> $baseoutname.map");
 	open(PED, "> $baseoutname.ped");
 	my $fh;
+	
+	my $genderfile = 0;
+	my %genderconverter;
+	if($gender ne "1" && $gender ne "2" && $gender ne "other"){
+		$genderfile = 1;
+		open(GE, "< $gender") || die "[PRINTER] Could not open gender file: $gender!\n";
+		while(my $line = <GE>){
+			chomp $line;
+			my @segs = split(/\t/, $line);
+			$genderconverter{$segs[0]} = $segs[1];
+		}
+		close GE;
+	}
 	if(defined($genokey)){
 		open($fh, "< $genokey") || die "[PRINTER] Could not open genokey file: $genokey!\n";
 	}
@@ -40,8 +53,23 @@ sub printOutPedMap{
 					print MAP "$cn\t$x\_loc\t0\t$l\n";
 				}
 			}
+			# Check to see if there is a separate name column for the animal
+			my $name; 
+			if($genotype->anname() eq "" || length($genotype->anname()) == 0){
+				$name = $genotype->ankey();
+			}else{
+				$name = $genotype->anname();
+			}
 			
-			print PED $genotype->population() . " " . $genotype->anname() . " 0 0 1 0";
+			# Check to see if there are assigned genders
+			my $gcode;
+			if($genderfile){
+				$gcode = genderconverter{$name};
+			}else{
+				$gcode = $gender;
+			}
+			
+			print PED $genotype->population() . " " . $name . " 0 0 $gcode 0";
 			foreach my $g (@genos){
 				my $conv = $aipl{$g};
 				print PED " $conv";
@@ -171,14 +199,33 @@ sub convertFromBed{
 }
 
 sub convertFromCHRDATA{
-	my ($self, $file) = @_;
+	my ($self, $file, $chiptype) = @_;
 	open(IN, "< $file") || die "[MAPBED - CHRDATA] Could not open input chromosome.data file!\n";
 	my $h = <IN>;
+	my @hsegs = split(/\s+/, $h);
+	my $filtidx = 0;
+	# If we can prefilter map locations, then we'll search for the index location for the chip
+	if(defined($chiptype)){
+		for(my $x = 6; $x < scalar(@hsegs); $x++){
+			if($hsegs[$x] eq $chiptype){
+				$filtidx = $x;
+			}
+		}
+		if($filtidx == 0){
+			print "[MAPBED - CHRDATA] could not find input chiptype in chromosome.data file!\n";
+		}
+	}
+	
 	my (@chrs, @locs);
 	while(my $line = <IN>){
 		chomp $line;
 		my @segs = split(/\s+/, $line);
 		my $chr = "chr" . $segs[1];
+		if($filtidx){
+			if($segs[$filtidx] == 0){
+				next;
+			}
+		}
 		push(@chrs, $chr);
 		push(@locs, $segs[4]);
 		#$self->push_chr($chr);
