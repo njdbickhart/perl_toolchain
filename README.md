@@ -16,3 +16,13 @@ $ sh step2_required_library_install.sh
 ```
 
 This will take some time, but after it is finished, you should be able to run just about all of the scripts
+
+
+# Troubleshooting
+There is an issue with the Forks::Super library that might cause errors during the installation. If you receive an error at the end of the "step 2" script, please try reinstalling the module by running the following command:
+
+```bash
+$ cpanm --verbose Forks::Super
+```
+
+This should install the library properly after a lengthy series of tests.
