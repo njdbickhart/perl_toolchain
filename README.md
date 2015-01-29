@@ -17,6 +17,13 @@ $ sh step2_required_library_install.sh
 
 This will take some time, but after it is finished, you should be able to run just about all of the scripts
 
+The final test will check to see if you have the required third-party programs installed on your system and in your current $PATH environmental variable.
+
+```bash
+$ perl step3_check_path_for_third_party_programs.pl
+```
+
+If the script returns any errors, please search for these tools online and install them as per the instructions of their respective authors. The executables for these programs must be in your path to be used by the scripts (ie. in your ~/bin folder).
 
 # Troubleshooting
 There is an issue with the Forks::Super library that might cause errors during the installation. If you receive an error at the end of the "step 2" script, please try reinstalling the module by running the following command:
