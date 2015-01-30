@@ -10,7 +10,11 @@ use Getopt::Std;
 
 # Define the program inputs and a help menu (good practice)
 my %opts;
-my $usage = "perl $0 -r <reference genome fasta> -i <input fq spreadsheet> -o <base output dir> -n <Max number of threads>\n";
+my $usage = "perl $0 [options -- all mandatory]
+	-r <reference genome fasta; File must be indexed by the same version of BWA on your path> 
+	-i <input fq spreadsheet; format(per line): fastq1 (tab) fastq2 (tab) sample name> 
+	-o <base output dir; will create if not present> 
+	-n <Max number of threads>\n";
 
 # Retrieve the arguments from the flags
 getopt('rions', \%opts);
