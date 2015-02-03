@@ -47,6 +47,7 @@ print STDERR "Now filtering the RAPTR-SV file...\n";
 open(IN, "< $opts{i}") || die "Could not open RAPTR-SV file: $opts{i}!\n$usage";
 open(OUT, "> $opts{o}");
 while(my $line = <IN>){
+	chomp $line;
 	$totalLines++;
 	my $sv = SVEntry->new('line' => $line);
 	my $rawcount = $sv->getRawReadCount();
