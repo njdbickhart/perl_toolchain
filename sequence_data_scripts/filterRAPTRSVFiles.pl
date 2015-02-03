@@ -17,7 +17,7 @@ my $usage = "perl $0 -b <sam/bam file (list?)> -i <RAPTR-SV file> -o <output bed
 	-f	OPTIONAL: Read support ratio [default: 0.50]
 	-c	OPTIONAL: X coverage filter [default: calls must have at least 0.30 of the expected coverage in read pairs]\n";
 	
-getopt('bifc', \%opts);
+getopt('bifco', \%opts);
 
 if(!defined($opts{'b'}) || !defined($opts{'i'}) || !defined($opts{'o'})){
 	print "Error! Missing required arguments!\n"; 

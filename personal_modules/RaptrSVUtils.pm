@@ -7,7 +7,7 @@ use Mouse::Util::TypeConstraints;
 use strict;
 use namespace::autoclean;
 
-has 'line' => (is => 'rw', isa => 'Str', required => 1, clearer => 'remove_str');
+#has 'line' => (is => 'rw', isa => 'Str', required => 1, clearer => 'remove_str');
 
 has 'chr' => (is => 'rw', isa => 'Str');
 has ['outStart', 'inStart', 'inEnd', 'outEnd', 'divSup', 'splitSup', 'unbalSup'] => (is => 'rw', isa => 'Int', default => 0);
@@ -43,9 +43,9 @@ sub printBed{
 	}
 }
 
-before 'chr', 'outStart', 'inStart', 'inEnd', 'outEnd', 'divSup', 'splitSup', 'totSupp', 'svType' => sub {
-	my ($self) = @_;
-	my @segs = split(/\t/, $self->line());
+sub BUILD {
+	my ($self, $args) = @_;
+	my @segs = split(/\t/, $args->{"line"});
 	
 	$self->chr($segs[0]);
 	$self->outStart($segs[1]);
@@ -58,7 +58,7 @@ before 'chr', 'outStart', 'inStart', 'inEnd', 'outEnd', 'divSup', 'splitSup', 't
 	$self->unbalSup($segs[8]);
 	$self->totSupp($segs[9]);
 	
-	$self->remove_str();
+	#$self->remove_str();
 };
 
 __PACKAGE__->meta->make_immutable;

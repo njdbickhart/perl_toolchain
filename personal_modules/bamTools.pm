@@ -51,7 +51,8 @@ sub getXCov{
 sub _checkFile{
 	my ($self, $file) = @_;
 	my $sam = SamFile->new('File' => $file);
-	
+	$self->inputFile($sam);
+
 	my $basename = basename($file);
 	# Check if the file is a bam. If not, generate a new file that is a bam
 	if($basename =~ m/\.bam$/ || -B $file){
@@ -87,7 +88,7 @@ sub checkIndex{
 	if(-s $self->File . ".bai"){
 		# Nothing to do, returning
 		$self->isIndexed(1);
-		return;
+		#return;
 	}else{
 		print STDERR "[SAMFILE] Could not find index for bam, attempting to create one...\n";
 		system($self->samExe->SamIndex() . $self->File);
