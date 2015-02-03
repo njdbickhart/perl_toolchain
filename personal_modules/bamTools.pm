@@ -14,7 +14,7 @@ has 'inputFile' => (is => 'rw', isa => 'SamFile');
 has 'alternate' => (is => 'rw', isa => 'SamFile', predicate => 'has_bam');
 
 # Samtools version checking wrapper
-has 'samExe' => (is => 'rw', isa => 'SamtoolsExecutable', default => sub{SamtoolsExecutable->new()});
+has 'samExe' => (is => 'rw', isa => 'SamtoolsExecutable', lazy => 1, default => sub{SamtoolsExecutable->new()});
 
 # Uses samtools idxstats to get coverage data for a sam/bam
 sub getXCov{
@@ -76,7 +76,7 @@ use namespace::autoclean;
 has 'File' => (is => 'ro', isa => 'Str');
 has 'isBam' => (is => 'rw', isa => 'Bool', default => 0);
 has 'isIndexed' => (is => 'rw', isa => 'Bool', default => 0);
-has 'samExe' => (is => 'rw', isa => 'SamtoolsExecutable', default => sub{SamtoolsExecutable->new()});
+has 'samExe' => (is => 'rw', isa => 'SamtoolsExecutable', lazy => 1, default => sub{SamtoolsExecutable->new()});
 
 
 

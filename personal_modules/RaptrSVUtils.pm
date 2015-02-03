@@ -3,6 +3,7 @@
 
 package SVEntry;
 use Mouse;
+use Mouse::Util::TypeConstraints;
 use strict;
 use namespace::autoclean;
 
