@@ -71,10 +71,16 @@ sub mainRoutine{
 				my ($altseq, $type, $size) = simulateINDEL($seq);
 				close IN;
 				
+				if($type eq "INS"){
+					$seq = "-";
+				}else{
+					$seq = substr($seq, 0, $size);
+				}
+				
 				print OUT "$chr\t$x\t$endpos\t$sv\t$type\t$size\t$seq\t$altseq\t$maf\n";
 			}else{
 				# Assuming SNP here
-				open(IN, "samtools faidx $fasta $chr:$x-$x |") || die "Could not run samtools on $chr:$x-$endpos for $fasta!\n";
+				open(IN, "samtools faidx $fasta $chr:$x-$x |") || die "Could not run samtools on $chr:$x-$x for $fasta!\n";
 				my $h = <IN>;
 				my $seq = <IN>;
 				chomp($seq);
@@ -100,9 +106,9 @@ sub simulateINDEL{
 	my $size = int(rand(50) - 0.1) + 1;
 	if($type eq "INS"){
 		my $insseq = generateRandSeq($size);
-		return $insseq . $refseq, $type, $size;
+		return $insseq, $type, $size;
 	}else{
-		return substr($refseq, $size, length($refseq) - $size), $type, $size;
+		return "-", $type, $size;
 	}
 }
 
