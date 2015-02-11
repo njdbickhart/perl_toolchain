@@ -181,7 +181,7 @@ sub loadFile {
 		$line =~ s/\r//g;
 		if($line eq '' || $line =~ /^\s+$/){next;}
 		my @segs = split(/\t/, $line);
-		if(!(scalar(@segs) >= 4)){
+		if(!(scalar(@segs) >= 3)){
 			print STDERR "[perlBed] Error! Line has less than four categories! $line\n";
 			exit;
 		}
