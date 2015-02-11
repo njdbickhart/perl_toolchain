@@ -52,8 +52,8 @@ use Mouse;
 use kentBinTools;
 use namespace::autoclean;
 
-has 'bed' => (is => 'rw', isa => 'HashRef[HashRef[ArrayRef[BedCoord]]]', predicate => 'has_bed',); # {chr}->{bin}->[0]->genomic_coord
-has 'lines' => (is => 'rw', isa => 'Int',);
+has 'bed' => (is => 'rw', isa => 'HashRef[Any]', predicate => 'has_bed',); # {chr}->{bin}->[0]->genomic_coord
+has 'lines' => (is => 'rw', isa => 'Int', default => 0,);
 
 
 # takes longer, but is sorted based on chromosome and then start coordinate position
@@ -206,7 +206,7 @@ sub loadFile {
 			push(@{$h{$segs[0]}->{$bin}}, $entry);
 			$self->bed(\%h);
 		}else{
-			my %h = $self->bed();
+			my %h = %{$self->bed()};
 			push(@{$h{$segs[0]}->{$bin}}, $entry);
 			$self->bed(\%h);
 		}
