@@ -19,7 +19,7 @@ if(scalar(@ARGV) < 4){
 }
 
 # Load the repeat bed file
-my $repeats = perlBed->new();
+my $repeats = BedContainer->new();
 $repeats->loadFile($ARGV[0]);
 
 # Read the FAI file and generate a hash of chromosomes and lengths
