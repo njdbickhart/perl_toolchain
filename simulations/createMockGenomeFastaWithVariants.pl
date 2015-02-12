@@ -28,10 +28,10 @@ my $usage = "perl $0 [All arguments are mandatory]
 	-l <read length>
 	-e <sequencing error rate>
 	-b <debug flag (prevents erasure of temp files)>\n";
-getopt('vgordminle', \%opts);
+getopt('vgodminle', \%opts);
 
 my @missing;
-foreach my $key ("v", "g", "o", "r", "d", "m", "i", "n", "l", "e"){
+foreach my $key ("v", "g", "o", "d", "m", "i", "n", "l", "e"){
 	if(!defined($opts{$key})){
 		push(@missing, $key);
 	}
@@ -117,7 +117,7 @@ while(my $line = <IDX>){
 	$chrsizes{$segs[0]} = $segs[1];
 }
 close IDX;
-my $readnum = int($genomesize / ($opts{'l'} * 2));
+my $readnum = int($genomesize / ($opts{'l'} * 2)) * $opts{'n'};
 
 # Create both variant genome fastas
 my ($hetandhom, $hom) = createBothVariantFastas($opts{g}, $genomeFa1, $genomeFa2, \%chrsizes, \%beds);
@@ -153,7 +153,7 @@ for (my $x = 0; $x < 2; $x++) {
 		
 		$curvar = $vars->{$segs[0]}->[$varidx];
 		
-		while($curvar->start <= $segs[1]){
+		while($curvar->start <= $segs[1] && $varidx < scalar(@{$vars->{$segs[0]}}) - 1){
 			# Only change the offset if the current variant site is AFTER the known variant location!
 			$varoffset = updateOffset($curvar, $varoffset);
 			$varidx++;
@@ -271,7 +271,7 @@ sub generateVariantFastaLONG{
 	foreach my $chr (keys %{$chrlist}){
 		my $chrsize = $chrlist->{$chr};
 		print STDERR "Working on generating $chr for $outputfa...\n";
-		my @variants = $vlist->{$chr};
+		my @variants = @{$vlist->{$chr}};
 		
 		# This is a really terrible, brute force way, but it's the quickest to code
 		open(IN, "samtools faidx $genomefa $chr:1-$chrsize |");
@@ -287,6 +287,7 @@ sub generateVariantFastaLONG{
 		print OUT ">$chr\n";
 		my @buffer;
 		#my $printout = 0;
+		my $varcount = 0;
 		for(my $x = 0; $x < scalar(@seq); $x++){
 			if(scalar(@variants) > 0){
 				my $curvar = $variants[0];
@@ -307,17 +308,24 @@ sub generateVariantFastaLONG{
 									#$printout += 60;
 								}
 							}
+							$varcount++;
+							print STDERR "Printed out variant...\t$varcount\r";
 							#print STDERR $curvar->printCoords() . "\t$s\t$len\n";
 							#$x = $curvar->end();
 							shift(@variants);
 						}elsif($curvar->get_value("subtype") eq "DEL"){
 							$x = $curvar->end();
+							$varcount++;
+                                                        print STDERR "Printed out variant...\t$varcount\r";
 							#print STDERR $curvar->printCoords() . "\t$printout\n";
 							shift(@variants);
 						}
 					}elsif($curvar->get_value("SVtype") eq "SNP"){
 						# Really easy substitution
+						$varcount++;
+                                                print STDERR "Printed out variant...\t$varcount\r";
 						push(@buffer, $curvar->get_value("alt"));
+						shift(@variants);
 					}	
 				}
 				if(scalar(@buffer) >= 60){
@@ -334,6 +342,7 @@ sub generateVariantFastaLONG{
 				}
 			}
 		}
+		print STDERR "\n";
 		if(scalar(@buffer) > 0){
 			print OUT join('', @buffer) . "\n";
 		}
