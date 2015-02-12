@@ -123,9 +123,9 @@ my $readnum = int($genomesize / ($opts{'l'} * 2));
 my ($hetandhom, $hom) = createBothVariantFastas($opts{g}, $genomeFa1, $genomeFa2, \%chrsizes, \%beds);
 
 # Run two threads of wgsim to generate the fastqs
-fork{ sub => \&wgsimWrapper, args => [$genomeFa1, $fastq11, $fastq12, $wgsimLocs1, $opts{'e'}, $opts{'m'}, $opts{'i'}, $opts{'l'}, $readnum]};
+fork{ sub => \&wgsimWrapper, args => [$genomeFa1, $fastq11, $fastq12, $wgsimLocs1, $opts{'e'}, $opts{'m'}, $opts{'i'}, $opts{'l'}, ($readnum / 2)]};
 
-fork{ sub => \&wgsimWrapper, args => [$genomeFa2, $fastq21, $fastq22, $wgsimLocs2, $opts{'e'}, $opts{'m'}, $opts{'i'}, $opts{'l'}, $readnum]};
+fork{ sub => \&wgsimWrapper, args => [$genomeFa2, $fastq21, $fastq22, $wgsimLocs2, $opts{'e'}, $opts{'m'}, $opts{'i'}, $opts{'l'}, ($readnum / 2)]};
 
 waitall();
 

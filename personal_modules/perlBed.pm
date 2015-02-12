@@ -216,6 +216,48 @@ sub loadFile {
 	print STDERR "[perlBed] Finished loading bed file: $file\n";
 }
 
+# Assumes the bed coordinates are merged
+# Returns an integer value of the summed length of all bedcoords in this container
+sub calculateBedLength{
+	my ($self, $chr) = @_;
+	
+	my $sum = 0;
+	foreach my $b (keys %{$self->bed()->{$chr}}){
+		foreach my $bed (@{$self->bed()->{$chr}->{$b}}){
+			$sum += $bed->end - $bed->start;
+		}
+	}
+	return $sum;
+}
+
+# Returns BedCoord object if it intersects
+# Returns '0' if no intersection
+sub firstIntersect{
+	my ($self, $chr, $start, $end) = @_;
+	
+	my $binner = kentBinTools->new();
+        unless($self->has_bed()){
+                print STDERR "[perlBed] Error! Called data_intersects before loading data!\n";
+                exit;
+        }
+        if(!(exists($self->bed()->{$chr}))){
+                return 0;
+        }
+
+        my @bins = $binner->searchbins($start, $end);
+        foreach my $b (@bins){
+                if(!(exists($self->bed()->{$chr}->{$b}))){
+                        next;
+                }
+                foreach my $gc (@{$self->bed()->{$chr}->{$b}}){
+                        if($binner->overlap($gc->start(), $gc->end(), $start, $end) > 1){
+                                return $gc;
+                        }
+                }
+        }
+	return 0;
+}
+
 # Bool: does the input information intersect with the stored data
 sub intersects {
 	my ($self, $chr, $start, $end) = @_;
