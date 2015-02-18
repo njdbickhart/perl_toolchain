@@ -250,7 +250,7 @@ sub firstIntersect{
                         next;
                 }
                 foreach my $gc (@{$self->bed()->{$chr}->{$b}}){
-                        if($binner->overlap($gc->start(), $gc->end(), $start, $end) > 1){
+                        if($binner->overlap($gc->start(), $gc->end(), $start, $end) > 0){
                                 return $gc;
                         }
                 }
@@ -277,7 +277,7 @@ sub intersects {
 			next;
 		}
 		foreach my $gc (@{$self->bed()->{$chr}->{$b}}){
-			if($binner->overlap($gc->start(), $gc->end(), $start, $end) > 1){
+			if($binner->overlap($gc->start(), $gc->end(), $start, $end) > 0){
 				return 1;
 			}
 		}
