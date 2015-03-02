@@ -2,6 +2,8 @@
 # This script will sample the bam file originally used to generate RAPTR-SV files and use it to filter RAPTR-SV calls
 # Filtration is based on an assumed X% coverage of the original bam (lowest coverage for assumed heterozygote calls 
 # based on simple Poisson coverage estimates) and a X% support ratio (support decimal divided by total number of reads)
+# 	3/2/2015. Added minimum read support filter. If the X coverage threshold is too low, this filter will set the
+#		minimum number of supporting reads to this value instead.
 
 use strict;
 use Getopt::Std;
@@ -9,15 +11,16 @@ use bamTools;
 use RaptrSVUtils;
 
 my %opts;
-my $usage = "perl $0 -b <sam/bam file (list?)> -i <RAPTR-SV file> -o <output bed file> -f <support ratio [optional]> -c <coverage filter [optional]> 
+my $usage = "perl $0 -b <sam/bam file (list?)> -i <RAPTR-SV file> -o <output bed file> -f <support ratio [optional]> -c <coverage filter [optional]> -r <minimum read filter [optional]>
 	-b	REQUIRED: sam/bam files used to generate this RAPTR-SV output file (can be a comma delimited list: ie. bam1,bam2,bam3)
 	-i	REQUIRED: input; the RAPTR-SV output file
 	-o	REQUIRED: the name of the output bed file
 	
 	-f	OPTIONAL: Read support ratio [default: 0.50]
-	-c	OPTIONAL: X coverage filter [default: calls must have at least 0.30 of the expected coverage in read pairs]\n";
+	-c	OPTIONAL: X coverage filter [default: calls must have at least 0.30 of the expected coverage in read pairs]
+	-r	OPTIONAL: Minimum read support filter [default: 0; if the X coverage filter is below this read count threshold, increase to this value]\n";
 	
-getopt('bifco', \%opts);
+getopt('bifcor', \%opts);
 
 if(!defined($opts{'b'}) || !defined($opts{'i'}) || !defined($opts{'o'})){
 	print "Error! Missing required arguments!\n"; 
@@ -40,6 +43,7 @@ foreach my $b (split(/,/, $opts{'b'})){
 }
 
 my $thresh = $totalCov * $covFilt;
+$thresh = ($thresh < $opts{'r'})? $opts{'r'} : $thresh;
 my $filteredEvents = 0;
 my $totalLines = 0;
 print STDERR "Read coverage threshold: $thresh\n";
