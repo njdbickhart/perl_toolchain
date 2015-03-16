@@ -16,11 +16,17 @@ has 'alternate' => (is => 'rw', isa => 'SamFile', predicate => 'has_bam');
 # Samtools version checking wrapper
 has 'samExe' => (is => 'rw', isa => 'SamtoolsExecutable', lazy => 1, default => sub{SamtoolsExecutable->new()});
 
-# Uses samtools idxstats to get coverage data for a sam/bam
-sub getXCov{
+# Initiator method to check file and determine if additional processing is needed
+sub prepSam{
 	my ($self, $file) = @_;
-	
 	$self->_checkFile($file);
+}
+
+# Uses samtools idxstats to get coverage data for a sam/bam
+# RETURN:
+# raw coverage, mapped coverage, hash->{chr} = [raw chr coverage, mapped chr coverage]
+sub getXCov{
+	my ($self) = @_;	
 	
 	my $SamFile = ($self->has_bam)? $self->alternate : $self->inputFile;
 
@@ -34,18 +40,23 @@ sub getXCov{
 	my $mappedReadCount = 0;
 	my $unmappedCount = 0;
 	
+	my %chrcov;
+	
 	while(my $line = <IN>){
 		chomp $line;
 		my @segs = split(/\t/, $line);
+		my $mapchrcov = ($segs[2] * $readlen) / $segs[1];
+		my $rawchrcov = (($segs[2] + $segs[3]) * $readlen) / $segs[1];
 		$genomeLength += $segs[1];
 		$mappedReadCount += $segs[2];
 		$unmappedCount += $segs[3];
+		$chrcov{$segs[0]} = [$rawchrcov, $mapchrcov];
 	}
 	close IN;
 	
 	my $rawCov = (($mappedReadCount + $unmappedCount) * $readlen)/ $genomeLength;
 	my $mappedCov = ($mappedReadCount * $readlen) / $genomeLength;
-	return ($rawCov, $mappedCov);
+	return ($rawCov, $mappedCov, \%chrcov);
 }
 
 sub _checkFile{

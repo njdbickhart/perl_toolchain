@@ -37,7 +37,8 @@ my $totalCov = 0;
 my $bamnum = scalar(split(/,/, $opts{'b'}));
 print STDERR "Determining raw x coverage from $bamnum bams...\n";
 foreach my $b (split(/,/, $opts{'b'})){
-	my ($rawcov, $mappedcov) = $reader->getXCov($b);
+	$reader->prepSam($b);
+	my ($rawcov, $mappedcov) = $reader->getXCov();
 	$totalCov += $rawcov;
 	print STDERR "BAM $b had $rawcov Raw X coverage and $mappedcov Mapped X coverage\n";
 }
