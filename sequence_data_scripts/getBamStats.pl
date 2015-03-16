@@ -15,12 +15,14 @@ REQUIRED:
 OPTIONAL:
 	-o	Print data to this output file (output is tab delimited)\n";
 	
-getopt('bo', \%opts);
-
 if(scalar(@ARGV) == 0 || $ARGV[0] eq '-h'){
 	print $usage;
 	exit;
 }
+
+getopt('bo', \%opts);
+
+
 
 unless(defined($opts{'b'})){
 	print "Missing mandatory arguments!\n";
