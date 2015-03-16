@@ -45,12 +45,17 @@ sub getXCov{
 	while(my $line = <IN>){
 		chomp $line;
 		my @segs = split(/\t/, $line);
-		my $mapchrcov = ($segs[2] * $readlen) / $segs[1];
-		my $rawchrcov = (($segs[2] + $segs[3]) * $readlen) / $segs[1];
+		
+		if($segs[1] > 0){
+			my $mapchrcov = ($segs[2] * $readlen) / $segs[1];
+			my $rawchrcov = (($segs[2] + $segs[3]) * $readlen) / $segs[1];
+			$chrcov{$segs[0]} = [$rawchrcov, $mapchrcov];
+		}
+		
 		$genomeLength += $segs[1];
 		$mappedReadCount += $segs[2];
 		$unmappedCount += $segs[3];
-		$chrcov{$segs[0]} = [$rawchrcov, $mapchrcov];
+		
 	}
 	close IN;
 	
