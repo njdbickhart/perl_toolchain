@@ -178,6 +178,19 @@ sub GetBamReadLen{
 	return length($segs[9]);
 }
 
+# Runs samtools to generate uncompressed VCF files
+sub GenerateSamtoolsVCF{
+	my ($self, $bamarray, $output, $fasta, $optionalLoc) = @_;
+	my $bamstr = join(" ", @{$bamarray});
+	my $region = (defined($optionalLoc) && $optionalLoc ne "")? "-r $optionalLoc" : "";
+	if($self->isHTSlib){
+		system("samtools mpileup -C50 -gf $fasta -uv -t DP -o $output $region $bamstr");
+	}else{
+		system("samtools mpileup -C50 -uf $fasta $region $bamstr | bcftools view -bvcg - | bcftools view - | vcfutils.pl varFilter -D100 > $output");
+	}
+	print STDERR "[SAMEXE] Generated uncompressed vcf file: $output!\n";
+}
+
 # Returns a string to use for samtools idxstats
 # Again, redundant, but sticks with the theme of the wrapper
 sub SamIdxstats{
