@@ -52,19 +52,34 @@ has 'intersections' => (traits => ['Hash'], is => 'rw', isa => 'HashRef[Any]', p
 
 
 sub returnIntersections(){
-	my ($self) = @_;
+	my ($self, $available) = @_;
 	my @values;
+	my @singles;
 	
 	foreach my $h ($self->intersections->keyI){
 		foreach my $a (keys %{$self->intersections->getI($h)}){
 			my $ans = $self->intersections->getI($h)->{$a};
-			if(scalar(@{$ans}) > 1){
-				push(@values, Intersects->new('hap' => HapNum->new('hap' => $h, 'allele' => $a),
-					'animals' => $ans);
+			my $num = scalar(@{$ans});
+			if($num > 1){
+				my @found;
+				foreach my $b (@{$available}){
+					foreach my $c (@{$ans}){
+						if($b eq $c){
+							push(@found, $c);
+						}
+					}
+				}
+				if(scalar(@found) > 1){
+					push(@values, Intersects->new('hap' => HapNum->new('hap' => $h, 'allele' => $a),
+						'animals' => \@found);
+				}elsif(scalar(@found) == 1){
+					push(@singles, Intersects->new('hap' => HapNum->new('hap' => $h, 'allele' => $a),
+						'animals' => \@found);
+				}
 			}
 		}
 	}
-	return @values;
+	return \@values, \@singles;
 }
 
 sub calcIntersections(){
@@ -135,6 +150,13 @@ use namespace::autoclean;
 
 has 'chr' => (is => 'ro', isa => 'Str');
 has ['start', 'end'] => (is => 'ro', isa => 'Int');
+
+sub printUCSC(){
+	my ($self) = @_;
+	my $str = $self->chr() . ":";
+	$str .= $self->start() . "-" . $self->end();
+	return $str;
+}
 
 __PACKAGE__->meta->make_immutable;
 
