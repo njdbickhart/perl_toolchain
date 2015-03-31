@@ -2,6 +2,91 @@
 # This is a highly specialized class that deals with the data files that Jana's haplotype program generates
 # First, the user must generate a HapSegMap to identify haplotype genomic coordinates
 # Next, the user must generate the Individual table to associate haplotypes with individuals sequenced
+package VCFHetFilter;
+use Mouse;
+use strict;
+use namespace::autoclean;
+
+has ['vcffile', 'outbase'] => (is => 'ro', isa => 'Str', required => 1);
+has ['retained', 'possiblehom', 'possiblehet', 'filtered'] => (is => 'rw', isa => 'Str');
+has 'vcfhead' => (traits => ['Array'], is => 'rw', isa => 'ArrayRef[Str]', default => sub{[]}, handles => {
+	'add' => 'push',});
+
+sub startMultHetFilter(){
+	my ($self) = @_;
+	
+	# Generate output file names
+	$self->retained($self->outbase . ".fixed.vcf");
+	$self->possiblehom($self->outbase . ".homozygous.vcf");
+	$self->possiblehet($self->outbase . ".heterozygous.vcf");
+	$self->filtered($self->outbase . ".filtered.vcf");
+	
+	open(IN, "< " . $self->vcffile) || die "[VCFHETFILT] Could not open input vcf file!\n";
+	open(FIX, "> " . $self->retained);
+	open(HOM, "> " . $self->possiblehom);
+	open(HET, "> " . $self->possiblehet);
+	open(FIL, "> " . $self->filtered);
+	
+	my $header = 0;
+	my $filtered = 0;
+	my $fixed = 0;
+	while(my $line = <IN>){
+		chomp $line;
+		if($line =~ /^#/){
+			$self->add($line);
+			next;
+		}
+		
+		if($header == 0){
+			$header = 1;
+			my @head = @{$self->vcfhead};
+			print FIX join("\n", @head) . "\n";
+			print HOM join("\n", @head) . "\n";
+			print HET join("\n", @head) . "\n";
+			print FIL join("\n", @head) . "\n";
+		}
+		
+		my @segs = split(/\t/, $line);
+		my $num = scalar(@segs);
+		
+		my $hets = 0;
+		my $homs = 0;
+		foreach my $gt (@$segs[9 .. $num]){
+			my @gsegs = split(/:/, $gt);
+			my @csegs = split(/\//, $gsegs[0]);
+			if($csegs[0] eq '0' || $csegs[1] eq '0'){
+				$hets++;
+			}elsif($csegs[0] eq $cesegs[1]){
+				$homs++;
+			}else{
+				$hets++;
+			}
+		}
+		
+		if($homs == $num){
+			print FIX $line . "\n";
+			$fixed++;
+		}elsif($hets > 1){
+			print HET $line . "\n";
+		}elsif($homs > 1){
+			print HOM $line . "\n";
+		}else{
+			print FIL $line . "\n";
+			$filtered++;
+		}
+	}
+	close IN;
+	close FIX;
+	close HET;
+	close HOM;
+	close FIL;
+	
+	print "[VCFHETFILT] For file: " . $self->vcffile . " found $fixed fixed homozygotes and $filtered unconfident heterozygote calls\n";
+}
+
+
+__PACKAGE__->meta->make_immutable;
+
 package HapSegMap;
 use Mouse;
 use strict;
