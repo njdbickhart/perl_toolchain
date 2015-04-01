@@ -113,7 +113,7 @@ $log->Info("Merger", "Finished bam merger.");
 
 if($runSNPFork){
 	$log->Info("SNPFORK", "Beginning Samtools SNP calling methods");
-	mkdir("$outputdir/vcfs") || $log->Warn("SNPFORK", "Could not create vcf directory!");
+	mkdir("$outputfolder/vcfs") || $log->Warn("SNPFORK", "Could not create vcf directory!");
 	my @coords;
 	if(defined($fastacoords)){
 		open(IN, "< $fastacoords") || die $log->Fatal("SNPFORK", "Could not open fasta coordinate file! $fastacoords");
