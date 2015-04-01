@@ -13,11 +13,11 @@ use Forks::Super;
 use simpleConfigParser;
 use simpleLogger;
 
-my ($configfile, $javaexe, $picardfolder, $outputfolder, $snpeffjar, $spreadsheet, $refgenome, $threads);
+my ($configfile, $javaexe, $picardfolder, $outputfolder, $snpeffjar, $spreadsheet, $refgenome, $threads, $fastacoords);
 my ($runSNPFork, $runSNPEff);
 my @requiredConfig = ("java", "picard", "snpeff", "runSNP", "runEFF");
 
-my $usage = "perl $0 --fastqs <spreadsheet to be processed> --output <base output folder>
+my $usage = "perl $0 --fastqs <spreadsheet to be processed> --output <base output folder> --reference <reference genome fasta>
 Arguments:
 	--fastqs	A tab-delimited spreadsheet with fastq file locations and read group info
 	--output	The base output folder for all bams and vcfs
@@ -25,6 +25,7 @@ Arguments:
 
 Optional:
 	--config	Override default configuration (searches for ~/.mergedpipeline.cnfg by default)
+	--coords	Reference genome fasta coordinates for threaded SNP calling
 	--threads	Number of threads to fork (default: 1)
 	";
 
@@ -75,6 +76,7 @@ unless(-e $reffai){
 	system("samtools index $refgenome");
 }
 
+$log->Info("SpreadSheet", "Starting fastq file processing.");
 # Load spreadsheet for processing
 open(IN, "< $spreadsheet") || die "could not open fastq spreadsheet: $spreadsheet!\n";
 my %counter;
@@ -87,25 +89,155 @@ while(my $line = <IN>){
 	$counter{$segs[-1]} += 1;
 	
 	# The command that creates the new alignment process
-	fork { sub => \&runBWAAligner, args => [$segs[0], $segs[1], $refgenome, $reffai, $outputfolder, $segs[-1], $segs[-2], $counter{$segs[-1]}, $log], max_proc => $threads };
-	push(@{$bams{$segs[-1]}}, "$outputfolder/$segs[-1]/$segs[-1].$counter{$segs[-1]}.bam");
+	fork { sub => \&runBWAAligner, 
+		args => [$segs[0], $segs[1], $refgenome, $reffai, $outputfolder, $segs[-1], $segs[-2], $counter{$segs[-1]}, $log, $javaexe, $picardfolder], 
+		max_proc => $threads };
+	push(@{$bams{$segs[-1]}}, "$outputfolder/$segs[-1]/$segs[-1].$counter{$segs[-1]}.nodup.bam");
 }
 close IN;
 waitall;
 
 # After generating all of the bams, now do the merger
+$log->Info("Merger", "Beginning bam merger.");
+my @finalbams;
+foreach my $sample (keys(%bams)){
+	my $finalbam = "$outputfolder/$sample/$sample.merged.bam";
+	fork { sub => \&samMerge,
+		args => [$bams{$sample}, "$outputfolder/$sample", $log, $sample],
+		max_proc => $threads };
+	push(@finalbams, $finalbam);
+}
+
+waitall;
+$log->Info("Merger", "Finished bam merger.");
+
+if($runSNPFork){
+	$log->Info("SNPFORK", "Beginning Samtools SNP calling methods");
+	mkdir("$outputdir/vcfs") || $log->Warn("SNPFORK", "Could not create vcf directory!");
+	my @coords;
+	if(defined($fastacoords)){
+		open(IN, "< $fastacoords") || die $log->Fatal("SNPFORK", "Could not open fasta coordinate file! $fastacoords");
+		while(my $line = <IN>){
+			chomp $line;
+			push(@coords, $line);
+		}
+		close IN;
+	}else{
+		open(IN, "< $reffai") || die $log->Fatal("SNPFORK", "Could not open reference fai file! $reffai");
+		while(my $line = <IN>){
+			chomp $line;
+			my @segs = split(/\t/, $line);
+			push(@coords, "$segs[0]:1-$segs[1]");
+		}
+		close IN;
+	}
+	
+	my $samexe = SamtoolsExecutable->new('log' => $log);
+	my @vcfsegs;
+	foreach my $c (@coords){
+		my $out = "$outputfolder/vcfs/combined.$c.vcf";
+		fork { sub => \$samexe->GenerateSamtoolsVCF,
+			args => [\@finalbams, $out, $refgenome, $c],
+			max_proc => $threads };
+		push(@vcfsegs, $out);
+	}
+	
+	waitall;
+	
+	$log->Info("SNPFORK", "Beginning bam merger");
+	$samexe->MergeSamtoolsVCF(\@vcfsegs, "$outputfolder/vcf/combined.vcf");
+	
+	if(-s "$outputfolder/vcf/combined.vcf"){
+		$log->Info("SNPFORK", "Removing temporary vcf files");
+		foreach my $v (@vcfsegs){
+			system("rm $v");
+		}
+	}
+	
+	if($runSNPEff){
+		# TODO: Implement SNPeff annotation of vcf file
+	}
+}
+
+$log->Info("End", "Run completed successfully");
+$log->Close();
 
 exit;
+sub samMerge{
+	my ($file_array, $outputdir, $log, $sample) = @_;
+	
+	my $output = "$outputdir/$sample.merged.bam";
+	my $header = headerCreation($file_array, "$outputdir/$sample.header.sam");
+	my $filestr = join(" ", @{$file_array});
+	log->Info("samtools merge -h $header $output $filestr");
+	system("samtools merge -h $header $output $filestr");
+	log->Info("samtools index $output");
+	system("samtools index $output");
+	
+	if(-s $output){
+		log->Info("Cleaning up bam files...");
+		foreach my $f (@{$file_array}){
+			system("rm $f");
+		}
+	}
+	
+	if(-s $output){
+		system("rm $header");
+	}
+}
+
+sub headerCreation{
+	my ($file_array, $header_name) = @_;
+	my %order = ('@HD' => 0, '@SQ' => 1, '@RG' => 2, '@PG' => 3, '@CO' => 4);
+	my @store; # [0,1,2,3] -> []
+	my $begin = 1;
+	
+	foreach my $f (@{$file_array}){
+		unless(-s $f){
+			print "Could not find file: $f for samtools header creation!\n";
+		}
+		
+		open(IN, "samtools view -H $f | ");
+		while(my $line = <IN>){
+			chomp $line;
+			my @segs = split(/\t/, $line);
+			
+			if(!exists($order{$segs[0]})){next;}
+			if($begin && $segs[0] ne '@RG'){
+				my $num = $order{$segs[0]};
+				push(@{$store[$num]}, $line);
+			}elsif($segs[0] eq '@RG'){
+				push(@{$store[2]}, $line);
+			}
+		}
+		close IN;
+		$begin = 0;
+	}
+	
+	open(OUT, "> $header_name");
+	for(my $x = 0; $x < scalar(@store); $x++){
+		my %unique;
+		foreach my $row (@{$store[$x]}){
+			$unique{$row} = 1;
+		}
+		# Print out only unique lines!
+		foreach my $row (keys(%unique)){
+			print OUT "$row\n";
+		}
+	}
+	close OUT;
+}
 
 # The workhorse subroutine
 sub runBWAAligner{
 	# Perl needs to read in the arguments to the subroutine
-	my ($fq1, $fq2, $ref, $reffai, $outdir, $base, $lib, $num, $log) = @_;
+	my ($fq1, $fq2, $ref, $reffai, $outdir, $base, $lib, $num, $log, $java, $picarddir) = @_;
 	# Take care of the names of the input and output files
 	my $fqbase = basename($fq1);
 	my ($fqStr) = $fqbase =~ /(.+)\.(fastq|fq).*/;
 	my $bwasam = "$outdir/$base/$base.$num.sam";
 	my $bwabam = "$outdir/$base/$base.$num.bam";
+	my $bwadedupbam = "$outdir/$base/$base.$num.nodup.bam";
 	#my $bwasort = "$outdir/$base/$base.$num.sorted";
 	
 	# Create a sub directory if needed
@@ -122,6 +254,7 @@ sub runBWAAligner{
 	#print "samtools sort $bwabam $bwasort\n";
 	#system("samtools sort $bwabam $bwasort");
 	#system("samtools index $bwasort.bam");
+	system("$java -jar $picarddir/picard.jar MarkDuplicates INPUT=$bwabam OUTPUT=$bwadedupbam METRICS_FILE=$bwadedupbam.metrics VALIDATION_STRINGENCY=LENIENT");
 	
 	# If the bam file exists and is not empty, then remove the sam file
 	if( -s $bwabam){
@@ -130,4 +263,9 @@ sub runBWAAligner{
 	}
 	
 	# $bwabam should be the sorted, indexed bam at the end of the process due to my API
+	# I just need to remove the base bam after marking duplicates
+	if( -s $bwadedupbam){
+		system("rm $bwabam");
+		$log->Info("BWAALIGNER", "Completed noduplicate bam. Removing BAM file");
+	}
 }
