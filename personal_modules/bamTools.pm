@@ -247,6 +247,22 @@ sub GenerateSamtoolsVCF{
 	}
 }
 
+# Runs BCFTools to generate merged VCF files
+sub MergeSamtoolsVCF{
+	my ($self, $vcfarray, $output) = @_;
+	my $bcfstr = join(" ", @{$vcfarray});
+	if($self->isHTSlib){
+		system("bcftools concat -O b $bcfstr | bcftools filter -O v -o $output -s LOWQUAL -i \'%QUAL>10\' -");
+	}else{
+		system("bcftools cat $bcfstr | vcfutils.pl varFilter -D100 > $output");
+	}
+	if($self->has_log){
+		$self->log->Info("SamEXE", "Generated merged vcf file: $output!");
+	}else{
+		print STDERR "[SAMEXE] Generated merged vcf file: $output!\n";
+	}
+}
+
 # Returns a string to use for samtools idxstats
 # Again, redundant, but sticks with the theme of the wrapper
 sub SamIdxstats{
