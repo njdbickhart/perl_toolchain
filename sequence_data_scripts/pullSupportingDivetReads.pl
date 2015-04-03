@@ -109,7 +109,7 @@ sub determineDelBreakpoints{
 			my $left2 = ($segs[2] > $segs[6])? $segs[2] : $segs[6];
 			my $right1 = ($segs[3] < $segs[7])? $segs[3] : $segs[7];
 			my $right2 = ($segs[3] > $segs[7])? $segs[3] : $segs[7];
-			push(@leftstarts, ($left1, $left2);
+			push(@leftstarts, ($left1, $left2));
 			push(@rightends, ($right1, $right2));
 		}
 	}
