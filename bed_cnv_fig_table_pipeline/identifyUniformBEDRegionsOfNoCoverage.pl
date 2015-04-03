@@ -22,13 +22,15 @@ my @files = split(/,/, $opts{'i'});
 
 my @FH;
 foreach my $f (@files){
-	my $fh = FileHandle->new("< $f");
+	my $fh = FileHandle->new();
+	$fh->open("< $f");
 	push(@FH, $fh);
 }
 
 open(OUT, "> $opts{o}");
 my $num = scalar(@FH);
-while(my $line = <$FH[0]>){
+my $startfh = $FH[0];
+while(my $line = <$startfh>){
 	my @segs = split(/\t/, $line);
 	my $chr = $segs[0];
 	my $start = $segs[1];
@@ -39,7 +41,8 @@ while(my $line = <$FH[0]>){
 		$vUnderThresh++;
 	}
 	for(my $x = 1; $x < $num; $x++){
-		$line = <$FH[$x]>;
+		my $fh = $FH[$x];
+		$line = <$fh>;
 		@segs = split(/\t/, $line);
 		if($segs[-1] <= $thresh){
 			$vUnderThresh++;
