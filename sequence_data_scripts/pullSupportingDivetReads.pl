@@ -28,7 +28,7 @@ my @divetpairs = split(/\_/, $opts{'i'});
 my @bampairs = split(/\_/, $opts{'b'});
 
 my %divet = map{split(/,/)} @divetpairs;
-my %bam = map{split(/,/} @bampairs;
+my %bam = map{split(/,/)} @bampairs;
 
 print STDERR "Beginning divet filtering\n";
 my %pickedDivets;
@@ -49,7 +49,7 @@ foreach my $animals (keys(%pickedDivets)){
 print STDERR "Pulling reads for fq generation\n";
 foreach my $animals (keys(%breakpoints)){
 	my $reads = getBreakpointReads($bam{$animals}, $opts{'c'}, $breakpoints{$animals}->[0], $breakpoints{$animals}->[1]);
-	for { sub => \&createReadFQs, args => [$bam{$animals}, $reads, "$opts{o}/$animals.breakpoint.fq"]};
+	fork { sub => \&createReadFQs, args => [$bam{$animals}, $reads, "$opts{o}/$animals.breakpoint.fq"]};
 }
 
 waitall;
@@ -65,7 +65,7 @@ sub createReadFQs{
 		my @segs = split(/\t/, $line);
 		if(exists($reads->{$segs[0]})){
 			chomp $segs[10];
-			print OUT, "\@$segs[0]\n$segs[9]\n+\n$segs[10]\n";
+			print OUT "\@$segs[0]\n$segs[9]\n+\n$segs[10]\n";
 		}
 	}
 	close IN;
