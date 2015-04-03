@@ -62,6 +62,10 @@ exit;
 
 sub createReadFQs{
 	my ($bam, $reads, $outputfq) = @_;
+	if(scalar(keys(%{$reads})) == 0){
+		print STDERR "Did not find suitable reads for $bam!\n";
+		return;
+	}
 	open(IN, "samtools view $bam |");
 	open(OUT, "> $outputfq");
 	while(my $line = <IN>){
@@ -77,6 +81,8 @@ sub createReadFQs{
 
 sub getBreakpointReads{
 	my ($bam, $chr, $start, $end) = @_;
+	
+	print STDERR "samtools view $bam $chr\:$start\-$end |\n";
 	open(IN, "samtools view $bam $chr\:$start\-$end |");
 	my %reads;
 	while(my $line = <IN>){
@@ -99,8 +105,12 @@ sub determineDelBreakpoints{
 		chomp $line;
 		my @segs = split(/\t/, $line);
 		if($segs[1] eq $chr && $segs[5] eq $chr){
-			push(@leftstarts, ($segs[2], $segs[6]));
-			push(@rightends, ($segs[3], $segs[7]));
+			my $left1 = ($segs[2] < $segs[6])? $segs[2] : $segs[6];
+			my $left2 = ($segs[2] > $segs[6])? $segs[2] : $segs[6];
+			my $right1 = ($segs[3] < $segs[7])? $segs[3] : $segs[7];
+			my $right2 = ($segs[3] > $segs[7])? $segs[3] : $segs[7];
+			push(@leftstarts, ($left1, $left2);
+			push(@rightends, ($right1, $right2));
 		}
 	}
 	
