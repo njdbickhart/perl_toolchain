@@ -34,6 +34,7 @@ print STDERR "Beginning divet filtering\n";
 my %pickedDivets;
 foreach my $animals (keys(%divet)){
 	$pickedDivets{$animals} = "$opts{o}/$animals.selected.divet";
+	print STDERR "Working on $opts{o}/$animals.selected.divet\n";
 	fork { sub => \&pullDivetSupport, args => [$opts{'c'}, $opts{'s'}, $opts{'e'}, "$opts{o}/$animals.selected.divet", $divet{$animals}] };
 }
 
@@ -44,11 +45,13 @@ my %breakpoints; # {animal} -> [start, end]
 foreach my $animals (keys(%pickedDivets)){
 	my ($start, $end) = determineDelBreakpoints($opts{'c'}, $pickedDivets{$animals});
 	$breakpoints{$animals} = [$start, $end];
+	print STDERR "Breakpoints for $animals : $opts{c} $start $end\n";
 }
 
 print STDERR "Pulling reads for fq generation\n";
 foreach my $animals (keys(%breakpoints)){
 	my $reads = getBreakpointReads($bam{$animals}, $opts{'c'}, $breakpoints{$animals}->[0], $breakpoints{$animals}->[1]);
+	print STDERR "Pulling reads for: $animals $bam{$animals}\n";
 	fork { sub => \&createReadFQs, args => [$bam{$animals}, $reads, "$opts{o}/$animals.breakpoint.fq"]};
 }
 
