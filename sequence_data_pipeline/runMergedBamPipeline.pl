@@ -254,7 +254,7 @@ sub runBWAAligner{
 	#print "samtools sort $bwabam $bwasort\n";
 	#system("samtools sort $bwabam $bwasort");
 	#system("samtools index $bwasort.bam");
-	system("$java -jar $picarddir/picard.jar MarkDuplicates INPUT=$bwabam OUTPUT=$bwadedupbam METRICS_FILE=$bwadedupbam.metrics VALIDATION_STRINGENCY=LENIENT");
+	system("$java -jar $picarddir/MarkDuplicates.jar INPUT=$bwabam OUTPUT=$bwadedupbam METRICS_FILE=$bwadedupbam.metrics VALIDATION_STRINGENCY=LENIENT");
 	
 	# If the bam file exists and is not empty, then remove the sam file
 	if( -s $bwabam){
