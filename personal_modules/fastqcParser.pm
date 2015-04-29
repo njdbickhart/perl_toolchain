@@ -48,7 +48,7 @@ sub runFastqc{
 		$self->log->Fatal("[FQCPARSE]", "Did not receive fastqc executable!");
 	}
 	
-	$self->log->Info("[FQCPARSE]", "Beginning fastqc runtime on file: " + $self->file);
+	$self->log->Info("[FQCPARSE]", "Beginning fastqc runtime on file: " . $self->file);
 	
 	# Determine file output 
 	my ($filename, $dirs, $ext) = fileparse($self->file);
@@ -62,7 +62,7 @@ sub runFastqc{
 	}
 	
 	system("$fastqc -q " . $self->file);
-	$self->log->Info("[FQCPARSE]", "Finished fastqc runtime on file: " + $self->file);
+	$self->log->Info("[FQCPARSE]", "Finished fastqc runtime on file: " . $self->file);
 }
 
 sub parseStats{
