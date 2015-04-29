@@ -260,6 +260,7 @@ sub fillContainers{
 }
 
 sub average{
+	my $self = shift(@_);
 	my $array_r = shift(@_);
 	my @numb = @{$array_r};
 	if(scalar(@numb) == 0){
