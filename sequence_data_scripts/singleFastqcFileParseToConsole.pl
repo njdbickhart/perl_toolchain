@@ -15,7 +15,7 @@ unless(scalar(@ARGV) > 1){
 	exit;
 }
 
-my $log = simpleLogger->new('logFileBaseStr' => 'simple_parser');
+my $log = Logger->new('logFileBaseStr' => 'simple_parser');
 
 my @parsers;
 my $fqcexe = shift(@ARGV);
