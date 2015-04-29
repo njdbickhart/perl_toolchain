@@ -123,7 +123,7 @@ sub parseStats{
 			}elsif($name eq "Basic Statistics"){
 				my $stats = sampStats->new();
 				$stats->fillContainers(\@linesegs, $pass);
-				$self->samstats($stats);
+				$self->sampstats($stats);
 			}
 
 		}elsif($inloop){
