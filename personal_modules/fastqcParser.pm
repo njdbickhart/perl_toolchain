@@ -9,9 +9,9 @@
 # Pipeline:
 # 	$object->runFastqc($fastqc_exe)
 #	$object->parseStats()
-#	$object->cleanUp()  <- optional removal of folders and zip file
+#	$object->cleanUp( (1))  <- optional removal of folders and (zip file)
 #	my @headers = $object->getHeaderArray()
-#	my @values = $object->getOutArray()
+#	my @values = $object->getOutArray()  #Output is a one dimensional array of values
 
 package fastqcParser;
 use Mouse;
@@ -19,15 +19,18 @@ use namespace::autoclean;
 use simpleLogger;
 use File::Basename;
 
-my @seHeaders = ("Sample", "Library", "FastqFile", "ReadNum", "TotalReads", "FilteredReads", "ReadLength", "TotalGCPerc", "BPQualityPass", 
-	"First25Qual", "Second25Qual", "Third25Qual", "Fourth25Qual", "ReadQSPass", "#ReadsQS2-11", "#ReadsQS12-21", 
-	"#ReadsQS22-31", "#ReadsQS32-40", "BPGCContentPass", "First25GC", "Second25GC", "Third25GC", "Fourth25GC", 
-	"BPNContentPass", "First25N", "Second25N", "Third25N", "Fourth25N", "SeqDupPerc", "OverRepPass", "KmerPass");
+our @seHeaders = ("Sample", "Library", "FastqFile", "ReadNum", "TotalReads", "FilteredReads", "ReadLength", "TotalGCPerc", "BPQualityPass",
+	"ReadQSPass", "BPGCContentPass", "BPNContentPass", "OverRepPass", "KmerPass", "SeqDupPerc",
+	"First25Qual", "Second25Qual", "Third25Qual", "Fourth25Qual", "#ReadsQS2-11", "#ReadsQS12-21", 
+	"#ReadsQS22-31", "#ReadsQS32-40", "First25GC", "Second25GC", "Third25GC", "Fourth25GC", 
+	"First25N", "Second25N", "Third25N", "Fourth25N" );
 
 has ['pass', 'overrep', 'kmer'] => (is => 'rw', isa => 'Str', default => 'PASS');
 has ['file', 'sample', 'library'] => (is => 'ro', isa => 'Str', required => 1);
 has 'log' => (is => 'ro', isa => 'simpleLogger', required => 1);
 has 'readNum' => (is => 'ro', isa => 'Num', required => 1);
+has 'seglendist' => (is => 'rw', isa => 'Str');
+has 'seqdup' => (is => 'rw', isa => 'Num');
 
 # Locations of fastqc folder and zip
 has ['folder', 'zip'] => (is => 'rw', isa => 'Str');
@@ -54,8 +57,8 @@ sub runFastqc{
 		$self->folder("$dirs/$fsegs[0]" . "_fastqc");
 		$self->zip("$dirs/$fsegs[0]" . "_fastqc.zip");
 	}else{
-		$self->folder("$dirs/$filenmae" . "_fastqc");
-		$self->zip("$dirs/$filenmae" . "_fastqc.zip");
+		$self->folder("$dirs/$filename" . "_fastqc");
+		$self->zip("$dirs/$filename" . "_fastqc.zip");
 	}
 	
 	system("$fastqc -q " . $self->file);
@@ -65,7 +68,7 @@ sub runFastqc{
 sub parseStats{
 	my ($self) = @_;
 	
-	$self->log->Info("[FQCPARSE]", "Parsing fastqc stats on file: " $self->file);
+	$self->log->Info("[FQCPARSE]", "Parsing fastqc stats on file: " . $self->file);
 	
 	open(IN, "< " . $self->folder . "/fastqc_data.txt") || $self->log->Fatal("[FQCPARSE]", "Error accessing fastqc_data.txt in folder: " . $self->folder . " for file: " . $self->file . "!");
 	my $store;
@@ -78,105 +81,49 @@ sub parseStats{
 			$inloop = 0;
 			
 			# TODO: rework this section to call individual class parsers rather than a blanket sub
-			my($name, $ret) = process_module_seg($store);
+			my @linesegs = split(/\n/, $store);
+			my ($name, $pass) = $linesegs[0] =~ m/>>(.+)\s+(.+)$/;
 			$store = '';
 
-			my $working = $anhash{$indiv[0]};
-
 			if($name eq "Per base sequence quality"){
-				$fq->bpquality($ret);
-				foreach my $k (keys(%{$ret->mean()})){
-					if(defined($working->bpquality)){
-						$working->bpquality->mean->{$k} = ($working->bpquality->mean()->{$k} + $ret->mean()->{$k}) / 2;
-					}else{
-						$working->bpquality(pbpquality->new('mean' => {}));
-						$working->bpquality->mean->{$k} = $ret->mean->{$k};
-					}
-
-				}
-				if($ret->pass() =~ m/fail/i || !defined($working->bpquality->pass())){
-					$working->bpquality->pass($ret->pass());
-				}
+				my $pbpquality = pbpQuality->new();
+				$pbpquality->fillContainers(\@linesegs, $pass);
+				$self->pbpquality($pbpquality);
 			}elsif($name eq "Per sequence quality scores"){
-				$fq->seqquality($ret);
-				foreach my $k (keys(%{$ret->count()})){
-					if(defined($working->seqquality)){
-						$working->seqquality->count->{$k} = $working->seqquality->count()->{$k} + $ret->count()->{$k};
-					}else{
-						$working->seqquality(pseqquality->new('count' => {}));
-						$working->seqquality->count->{$k} = $ret->count->{$k};
-					}
-
-				}
-				if($ret->pass() =~ m/fail/i || !defined($working->seqquality->pass())){
-					$working->seqquality->pass($ret->pass());
-				}
+				my $pseqquality = pseqQuality->new();
+				$pseqquality->fillContainers(\@linesegs, $pass);
+				$self->pseqquality($pseqquality);
 			}elsif($name eq "Per base sequence content"){
-				$fq->gccontent($ret);
-				foreach my $k (keys(%{$ret->gc()})){
-					if(defined($working->gccontent)){
-						$working->gccontent->gc->{$k} = ($working->gccontent->gc()->{$k} + $ret->gc()->{$k}) / 2;
-					}else{
-						$working->gccontent(pbpgccontent->new('gc' => {}));
-						$working->gccontent->gc->{$k} = $ret->gc()->{$k};
-					}							
-				}
-				if($ret->pass() =~ m/fail/i || !defined($working->gccontent->pass())){
-					$working->gccontent->pass($ret->pass());
-				}
+				my $pbpgccontent = pbpGCContent->new();
+				$pbpgccontent->fillContainers(\@linesegs, $pass);
+				$self->pbpgccontent($pbpgccontent);
 			}elsif($name eq "Per base GC content" || $name eq "Per sequence GC content"){
 			}elsif($name eq "Per base N content"){
-				$fq->ncontent($ret);
-				foreach my $k (keys(%{$ret->ns()})){
-					if(defined($working->ncontent)){
-						$working->ncontent->ns->{$k} = ($working->ncontent->ns()->{$k} + $ret->ns()->{$k}) / 2;
-					}else{
-						$working->ncontent(pbpncontent->new('ns' => {}));
-						$working->ncontent->ns->{$k} = $ret->ns()->{$k};
-					}
-				}
-				if($ret->pass() =~ m/fail/i || !defined($working->ncontent->pass())){
-					$working->ncontent->pass($ret->pass());
-				}
+				my $pbpncontent = pbpNContent->new();
+				$pbpncontent->fillContainers(\@linesegs, $pass);
+				$self->pbpncontent($pbpncontent);
 			}elsif($name eq "Sequence Length Distribution"){
-				$fq->seqlens($ret);
-				if(defined($working->seqlens())){
-					$working->seqlens(($working->seqlens() + $ret) / 2);
-				}else{
-					$working->seqlens($ret);
-				}						
+				my @lengths;
+				for(my $x = 1; $x < scalar(@linesegs); $x++){
+					if($linesegs[$x] =~ /^#/){next;}
+					my @msegs = split(/\s+/, $linesegs[$x]);
+					push(@lengths, "$msegs[0]=$msegs[1]");
+				}	
+				$self->seqlendist(join(";", @lengths));
 			}elsif($name eq "Sequence Duplication Levels"){
-				$fq->seqdups($ret);
-				if(defined($working->seqdups())){
-					$working->seqdups(($working->seqdups() + $ret) / 2);
-				}else{
-					$working->seqdups($ret);
+				foreach my $v (@linesegs){
+					if($v =~ /#Total Duplicate Percentage\s+(\d+)/){
+						$self->seqdup($1);
+					}
 				}
 			}elsif($name eq "Overrepresented sequences"){
-				$fq->overrep($ret);
-				$working->overrep($ret) if(!defined($working->overrep()) || $ret =~ m/fail/i);
+				$self->overrep($pass);
 			}elsif($name eq "Kmer Content"){
-				$fq->kmercon($ret);
-				$working->kmercon($ret) if(!defined($working->kmercon()) || $ret =~ m/fail/i);
+				$self->kmer($pass);
 			}elsif($name eq "Basic Statistics"){
-				$fq->stats($ret);
-				if(defined($working->stats)){
-					$working->stats->totseq($working->stats->totseq() + $ret->totseq());
-					$working->stats->filtseq($working->stats->filtseq() + $ret->filtseq());
-					$working->stats->seqlen(($working->stats->seqlen() + $ret->seqlen()) / 2);
-					$working->stats->gc(($working->stats->gc() + $ret->gc()) / 2);
-					if($ret->pass() =~ m/fail/i || !defined($working->stats->pass())){
-						$working->stats->pass($ret->pass());
-					}
-				}else{
-					$working->stats(stats->new());
-					$working->stats->totseq($ret->totseq());
-					$working->stats->filtseq($ret->filtseq());
-					$working->stats->seqlen($ret->seqlen());
-					$working->stats->gc($ret->gc());
-					$working->stats->pass($ret->pass());
-				}
-
+				my $stats = sampStats->new();
+				$stats->fillContainers(\@linesegs, $pass);
+				$self->samstats($stats);
 			}
 
 		}elsif($inloop){
@@ -184,69 +131,144 @@ sub parseStats{
 		}
 	}
 
-close IN;
+	close IN;
 }
 
+sub getOutArray{
+	my ($self) = @_;
+	#my @seHeaders = ("Sample", "Library", "FastqFile", "ReadNum", "TotalReads", "FilteredReads", "ReadLength", "TotalGCPerc", "BPQualityPass",
+	#	"ReadQSPass", "QualityScorePass", "BPGCContentPass", "BPNContentPass", "OverRepPass", "KmerPass", "SeqDupPerc",
+	#	"First25Qual", "Second25Qual", "Third25Qual", "Fourth25Qual", "#ReadsQS2-11", "#ReadsQS12-21", 
+	#	"#ReadsQS22-31", "#ReadsQS32-40", "First25GC", "Second25GC", "Third25GC", "Fourth25GC", 
+	#	"First25N", "Second25N", "Third25N", "Fourth25N" );
+	
+	my @output;
+	
+	push(@output, ($self->sample, $self->library, $self->file, $self->readNum, $self->sampstats->totseq, $self->sampstats->filtseq, $self->sampstats->seqlen, $self->sampstats->gc, $self->sampstats->pass));
+	push(@output, ($self->pbpquality->pass, $self->pseqquality->pass, $self->pbpgcquality->pass, $self->pbpnquality->pass, $self->overrep, $self->kmer, $self->seqdup));
+	my @keys = sort{ $a cmp $b} $self->pbpquality->getKeys();
+	my @qskeys = sort{ $a cmp $b} $self->pseqquality->getKeys();
+	push(@output, ($self->pbpquality->get($keys[0]), $self->pbpquality->get($keys[1]), $self->pbpquality->get($keys[2]), $self->pbpquality->get($keys[3])));
+	push(@output, ($self->pseqquality->get($qskeys[0]), $self->pseqquality->get($qskeys[1]), $self->pseqquality->get($qskeys[2]), $self->pseqquality->get($qskeys[3])));
+	push(@output, ($self->pbpgcquality->get($keys[0]), $self->pbpgcquality->get($keys[1]), $self->pbpgcquality->get($keys[2]), $self->pbpgcquality->get($keys[3])));
+	push(@output, ($self->pbpnquality->get($keys[0]), $self->pbpnquality->get($keys[1]), $self->pbpnquality->get($keys[2]), $self->pbpnquality->get($keys[3])));
+}
 
-struct('stats' => {
-	'pass' => '$',
-	'file' => '$',
-	'totseq' => '$',
-	'filtseq' => '$',
-	'seqlen' => '$',
-	'gc' => '$',
-});
+sub cleanUp{
+	my ($self, $czip) = @_;
+	
+	if( -s $self->folder){
+		$self->log->INFO("cleanup", "Removing fastqc uncompressed folder");
+	}
+	
+	if( -s $self->zip && $czip){
+		$self->log->INFO("cleanup", "Removing fastqc zip");
+	}
+}
 
-struct('pbpquality' => {
-	'pass' => '$',
-	'mean' => '%',
-	'median' => '%',
-});
-
-struct('pseqquality' => {
-	'pass' => '$',
-	'count' => '%',
-});
-
-struct('pbpgccontent' => {
-	'pass' => '$',
-	'gc' => '%',
-});
-
-struct('pbpncontent' => {
-	'pass' => '$',
-	'ns' => '%',
-});
-
-struct('indivrecord' => {
-	'stats' => '$',
-	'bpquality' => '$',
-	'seqquality' => '$',
-	'gccontent' => '$',
-	'ncontent' => '$',
-	'seqlens' => '$',
-	'seqdups' => '$',
-	'overrep' => '$',
-	'kmercon' => '$',
-});
+sub getHeaderArray{
+	my ($self) = @_;
+	
+	return \@seHeaders;
+}
 
 __PACKAGE__->meta->make_immutable;
+
+### All of the following packages are sub-data holders that process a large string of lines from fastqc text summary files
 
 package sampStats;
 use Mouse;
 use namespace::autoclean;
 
+has 'pass' => (is => 'rw', isa => 'Str', default => 'PASS');
 has ['totseq', 'filtseq', 'seqlen', 'gc'] => (is => 'rw', isa => 'Num', default => 0);
+
+sub fillContainers{
+	my ($self, $input, $pass) = @_;
+	
+	my @linesegs = @{$input};
+	$self->pass($pass);
+	for(my $x = 1; $x < scalar(@linesegs); $x++){
+		if($linesegs[$x] =~ /^#/){next;}
+		my @msegs = split(/\t/, $linesegs[$x]);
+		if($msegs[0] eq "Total Sequences"){
+			$self->totseq($msegs[1]);
+		}elsif($msegs[0] eq "Filtered Sequences"){
+			$self->filtseq($msegs[1]);
+		}elsif($msegs[0] eq "Sequence length"){
+			$self->seqlen($msegs[1]);
+		}elsif($msegs[0] eq "%GC"){
+			$self->gc($msegs[1]);
+		}
+	}
+}
+	
 
 __PACKAGE__->meta->make_immutable;
 
 package pbpQuality;
 use Mouse;
 use namespace::autoclean;
+	
+has 'pass' => (is => 'rw', isa => 'Str', default => 'PASS');
+has 'quarts' => (traits => ['Hash'], is => 'rw', isa => 'HashRef[Any]', default => sub{{}},
+	handles => {
+		'getKeys' => 'keys',
+		'exists' => 'exists',
+		'get' => 'get',
+		'set' => 'set',
+	});
 
-'pass' => '$',
-	'mean' => '%',
-	'median' => '%',
+sub fillContainers{
+	my ($self, $input, $pass) = @_;
+	my @linesegs = @{$input};
+	$self->pass($pass);
+	
+	my %meanhash;
+	my %medianhash;
+	for(my $x = 1; $x < scalar(@linesegs); $x++){
+		if($linesegs[$x] =~ /^#/){next;}
+		my @msegs = split(/\s+/, $linesegs[$x]);
+		if($msegs[0] =~ /(\d+)-(\d+)/){
+			for(my $y = $1; $y <= $2; $y++){
+				$meanhash{$y} = $msegs[1];
+				$medianhash{$y} = $msegs[2];
+			}
+		}else{
+			$meanhash{$msegs[0]} = $msegs[1];
+			$medianhash{$msegs[0]} = $msegs[2];
+		}
+	}
+	my @values = sort {$b <=> $a} keys %meanhash;
+	my %nmean;
+	my %nmedian;
+	for(my $x = 1; $x < $values[0] ; $x += int($values[0] * .25 + 0.5)){
+		my @meantemp;
+		my @mediantemp;
+		for(my $y = $x; $y <= $values[0]; $y++){
+			push(@meantemp, $meanhash{$y});
+			push(@mediantemp, $medianhash{$y});
+		}
+		my $str = "$x-" . ($x + int($values[0] * .25 + 0.5));
+		$self->set($str => $self->average(\@meantemp));
+		#$nmedian{$str} = average(\@mediantemp);
+	}
+
+}
+
+sub average{
+	my $array_r = shift(@_);
+	my @numb = @{$array_r};
+	if(scalar(@numb) == 0){
+		return 0;
+	}
+	my $total3 = 0;
+	foreach my $num1 (@numb) {
+	$total3 += $num1;
+	}
+	my $mean3 = $total3 / (scalar @numb);
+	return $mean3;
+}
 
 __PACKAGE__->meta->make_immutable;
 
@@ -254,8 +276,54 @@ package pseqQuality;
 use Mouse;
 use namespace::autoclean;
 
-'pass' => '$',
-	'count' => '%',
+has 'pass' => (is => 'rw', isa => 'Str', default => 'PASS');
+has 'quarts' => (traits => ['Hash'], is => 'rw', isa => 'HashRef[Any]', default => sub{{}},
+	handles => {
+		'getKeys' => 'keys',
+		'exists' => 'exists',
+		'get' => 'get',
+		'set' => 'set',
+	});
+	
+sub fillContainers{
+	my ($self, $input, $pass) = @_;
+	my @linesegs = @{$input};
+	$self->pass($pass);
+	
+	my %sqc;
+	for(my $x = 1; $x < scalar(@linesegs); $x++){
+		if($linesegs[$x] =~ /^#/){next;}
+		my @msegs = split(/\s+/, $linesegs[$x]);
+		$sqc{$msegs[0]} = $msegs[1];
+	}
+	my @values = sort {$b <=> $a} keys %sqc;
+	my %final;
+	for(my $x = 2; $x <= 40 +2; $x+=10){
+		my @meanvalue;
+		for(my $y = $x; $y <= $values[0]; $y++){
+			push(@meanvalue, $sqc{$y}) if exists($sqc{$y});
+		}
+		my $end = ($x + 10 > 40)? 40 : $x + 10;
+		my $str = "$x-$end";
+		$self->set($str => $self->average(\@meanvalue));
+		if($end == 40){last;}
+	}
+}
+
+sub average{
+	my $self = shift(@_);
+	my $array_r = shift(@_);
+	my @numb = @{$array_r};
+	if(scalar(@numb) == 0){
+		return 0;
+	}
+	my $total3 = 0;
+	foreach my $num1 (@numb) {
+	$total3 += $num1;
+	}
+	my $mean3 = $total3 / (scalar @numb);
+	return $mean3;
+}
 
 __PACKAGE__->meta->make_immutable;
 
@@ -263,8 +331,59 @@ package pbpGCContent;
 use Mouse;
 use namespace::autoclean;
 
-'pass' => '$',
-	'gc' => '%',
+has 'pass' => (is => 'rw', isa => 'Str', default => 'PASS');
+has 'quarts' => (traits => ['Hash'], is => 'rw', isa => 'HashRef[Any]', default => sub{{}},
+	handles => {
+		'getKeys' => 'keys',
+		'exists' => 'exists',
+		'get' => 'get',
+		'set' => 'set',
+	});
+
+sub fillContainers{
+	my ($self, $input, $pass) = @_;
+	my @linesegs = @{$input};
+	$self->pass($pass);
+	
+	my %meanhash;
+	for(my $x = 1; $x < scalar(@linesegs); $x++){
+		if($linesegs[$x] =~ /^#/){next;}
+		my @msegs = split(/\s+/, $linesegs[$x]);
+		if($msegs[0] =~ /(\d+)-(\d+)/){
+			for(my $y = $1; $y <= $2; $y++){
+				$meanhash{$y} = $msegs[1];
+			}
+		}else{
+			$meanhash{$msegs[0]} = $msegs[1];
+		}
+	}
+	my @values = sort {$b <=> $a} keys %meanhash;
+	my $z = 1;
+	for(my $x = 1; $x < $values[0]; $x += int($values[0] * .25 + 0.5)){
+		my @meantemp;
+		for(my $y = $x; $y <= $values[0]; $y++){
+			push(@meantemp, $meanhash{$y});
+		}
+		my $str = "$x-" . ($x + int($values[0] * .25 + 0.5));
+		$z++;
+		$self->set($str => $self->average(\@meantemp));
+	}
+}
+
+sub average{
+	my $self = shift(@_);
+	my $array_r = shift(@_);
+	my @numb = @{$array_r};
+	if(scalar(@numb) == 0){
+		return 0;
+	}
+	my $total3 = 0;
+	foreach my $num1 (@numb) {
+	$total3 += $num1;
+	}
+	my $mean3 = $total3 / (scalar @numb);
+	return $mean3;
+}
 
 __PACKAGE__->meta->make_immutable;
 
@@ -272,8 +391,59 @@ package pbpNContent;
 use Mouse;
 use namespace::autoclean;
 
-'pass' => '$',
-	'ns' => '%',
+has 'pass' => (is => 'rw', isa => 'Str', default => 'PASS');
+has 'quarts' => (traits => ['Hash'], is => 'rw', isa => 'HashRef[Any]', default => sub{{}},
+	handles => {
+		'getKeys' => 'keys',
+		'exists' => 'exists',
+		'get' => 'get',
+		'set' => 'set',
+	});
+
+sub fillContainers{
+	my ($self, $input, $pass) = @_;
+	my @linesegs = @{$input};
+	$self->pass($pass);
+	
+	my %meanhash;
+	for(my $x = 1; $x < scalar(@linesegs); $x++){
+		if($linesegs[$x] =~ /^#/){next;}
+		my @msegs = split(/\s+/, $linesegs[$x]);
+		if($msegs[0] =~ /(\d+)-(\d+)/){
+			for(my $y = $1; $y <= $2; $y++){
+				$meanhash{$y} = $msegs[1];
+			}
+		}else{
+			$meanhash{$msegs[0]} = $msegs[1];
+		}
+	}
+	my @values = sort {$b <=> $a} keys %meanhash;
+	my $z = 1;
+	for(my $x = 1; $x < $values[0]; $x += int($values[0] * .25 + 0.5)){
+		my @meantemp;
+		for(my $y = $x; $y <= $values[0]; $y++){
+			push(@meantemp, $meanhash{$y});
+		}
+		my $str = "$x-" . ($x + int($values[0] * .25 + 0.5));
+		$z++;
+		$self->set($str => $self->average(\@meantemp));
+	}
+}
+
+sub average{
+	my $self = shift(@_);
+	my $array_r = shift(@_);
+	my @numb = @{$array_r};
+	if(scalar(@numb) == 0){
+		return 0;
+	}
+	my $total3 = 0;
+	foreach my $num1 (@numb) {
+	$total3 += $num1;
+	}
+	my $mean3 = $total3 / (scalar @numb);
+	return $mean3;
+}
 
 __PACKAGE__->meta->make_immutable;
-
+1;
