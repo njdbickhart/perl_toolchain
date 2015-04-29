@@ -16,6 +16,7 @@ unless(scalar(@ARGV) > 1){
 }
 
 my $log = simpleLogger->new('logFileBaseStr' => 'simple_parser');
+$log->OpenLogger("./");
 
 my @parsers;
 my $fqcexe = shift(@ARGV);

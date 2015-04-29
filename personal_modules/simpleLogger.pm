@@ -9,7 +9,7 @@ use IO::File;
 use Fcntl qw(:flock SEEK_END);
 
 has 'logFileBaseStr' => (is => 'ro', isa => 'Str', required => 1);
-has 'logHandle' => (is => 'rw', isa => 'IO::File');
+has 'logHandle' => (is => 'rw', isa => 'IO::File', predicate => 'has_handle');
 
 sub OpenLogger{
 	my ($self, $outputfolder) = @_;
