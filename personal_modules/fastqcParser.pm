@@ -152,6 +152,8 @@ sub getOutArray{
 	push(@output, ($self->pseqquality->get($qskeys[0]), $self->pseqquality->get($qskeys[1]), $self->pseqquality->get($qskeys[2]), $self->pseqquality->get($qskeys[3])));
 	push(@output, ($self->pbpgcquality->get($keys[0]), $self->pbpgcquality->get($keys[1]), $self->pbpgcquality->get($keys[2]), $self->pbpgcquality->get($keys[3])));
 	push(@output, ($self->pbpnquality->get($keys[0]), $self->pbpnquality->get($keys[1]), $self->pbpnquality->get($keys[2]), $self->pbpnquality->get($keys[3])));
+	
+	return @output;
 }
 
 sub cleanUp{
@@ -169,7 +171,7 @@ sub cleanUp{
 sub getHeaderArray{
 	my ($self) = @_;
 	
-	return \@seHeaders;
+	return @seHeaders;
 }
 
 __PACKAGE__->meta->make_immutable;
