@@ -29,7 +29,7 @@ has ['pass', 'overrep', 'kmer'] => (is => 'rw', isa => 'Str', default => 'PASS')
 has ['file', 'sample', 'library'] => (is => 'ro', isa => 'Str', required => 1);
 has 'log' => (is => 'ro', isa => 'simpleLogger', required => 1);
 has 'readNum' => (is => 'ro', isa => 'Num', required => 1);
-has 'seglendist' => (is => 'rw', isa => 'Str');
+has 'seqlendist' => (is => 'rw', isa => 'Str');
 has 'seqdup' => (is => 'rw', isa => 'Num');
 
 # Locations of fastqc folder and zip
