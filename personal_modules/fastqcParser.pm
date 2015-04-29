@@ -145,13 +145,13 @@ sub getOutArray{
 	my @output;
 	
 	push(@output, ($self->sample, $self->library, $self->file, $self->readNum, $self->sampstats->totseq, $self->sampstats->filtseq, $self->sampstats->seqlen, $self->sampstats->gc, $self->sampstats->pass));
-	push(@output, ($self->pbpquality->pass, $self->pseqquality->pass, $self->pbpgcquality->pass, $self->pbpnquality->pass, $self->overrep, $self->kmer, $self->seqdup));
+	push(@output, ($self->pbpquality->pass, $self->pseqquality->pass, $self->pbpgccontent->pass, $self->pbpncontent->pass, $self->overrep, $self->kmer, $self->seqdup));
 	my @keys = sort{ $a cmp $b} $self->pbpquality->getKeys();
 	my @qskeys = sort{ $a cmp $b} $self->pseqquality->getKeys();
 	push(@output, ($self->pbpquality->get($keys[0]), $self->pbpquality->get($keys[1]), $self->pbpquality->get($keys[2]), $self->pbpquality->get($keys[3])));
 	push(@output, ($self->pseqquality->get($qskeys[0]), $self->pseqquality->get($qskeys[1]), $self->pseqquality->get($qskeys[2]), $self->pseqquality->get($qskeys[3])));
-	push(@output, ($self->pbpgcquality->get($keys[0]), $self->pbpgcquality->get($keys[1]), $self->pbpgcquality->get($keys[2]), $self->pbpgcquality->get($keys[3])));
-	push(@output, ($self->pbpnquality->get($keys[0]), $self->pbpnquality->get($keys[1]), $self->pbpnquality->get($keys[2]), $self->pbpnquality->get($keys[3])));
+	push(@output, ($self->pbpgccontent->get($keys[0]), $self->pbpgccontent->get($keys[1]), $self->pbpgccontent->get($keys[2]), $self->pbpgccontent->get($keys[3])));
+	push(@output, ($self->pbpncontent->get($keys[0]), $self->pbpncontent->get($keys[1]), $self->pbpncontent->get($keys[2]), $self->pbpncontent->get($keys[3])));
 	
 	return @output;
 }
