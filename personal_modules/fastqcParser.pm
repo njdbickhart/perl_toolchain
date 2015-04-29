@@ -183,7 +183,8 @@ use Mouse;
 use namespace::autoclean;
 
 has 'pass' => (is => 'rw', isa => 'Str', default => 'PASS');
-has ['totseq', 'filtseq', 'seqlen', 'gc'] => (is => 'rw', isa => 'Num', default => 0);
+has ['totseq', 'filtseq', 'gc'] => (is => 'rw', isa => 'Num', default => 0);
+has 'seqlen' => (is => 'rw', isa => 'Any');
 
 sub fillContainers{
 	my ($self, $input, $pass) = @_;

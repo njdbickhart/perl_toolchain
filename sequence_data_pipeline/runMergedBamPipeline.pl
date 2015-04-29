@@ -12,10 +12,11 @@ use bamTools;
 use Forks::Super;
 use simpleConfigParser;
 use simpleLogger;
+use fastqcParser;
 
-my ($configfile, $javaexe, $picardfolder, $outputfolder, $snpeffjar, $spreadsheet, $refgenome, $threads, $fastacoords);
-my ($runSNPFork, $runSNPEff);
-my @requiredConfig = ("java", "picard", "snpeff", "runSNP", "runEFF");
+my ($configfile, $javaexe, $picardfolder, $outputfolder, $snpeffjar, $spreadsheet, $refgenome, $threads, $fastacoords, $fastqc);
+my ($runSNPFork, $runSNPEff, $runFQC);
+my @requiredConfig = ("java", "picard", "snpeff", "fastqc", "runSNP", "runEFF", "runFQC");
 
 my $usage = "perl $0 --fastqs <spreadsheet to be processed> --output <base output folder> --reference <reference genome fasta>
 Arguments:
@@ -51,8 +52,10 @@ $cfg->checkReqKeys(\@requiredConfig);
 
 # Population config settings
 $picardfolder = $cfg->get("picard");
+$fastqc = $cfg->get("fastqc");
 $javaexe = $cfg->get("java");
 $snpeffjar = $cfg->get("snpeff");
+$runFQC = $cfg->get("runFQC");
 $runSNPEff = $cfg->get("runEFF");
 $runSNPFork = $cfg->get("runSNP");
 
@@ -81,12 +84,26 @@ $log->Info("SpreadSheet", "Starting fastq file processing.");
 open(IN, "< $spreadsheet") || die "could not open fastq spreadsheet: $spreadsheet!\n";
 my %counter;
 my %bams; # {sample} -> [] -> sortedbam
+my @parsers;
 while(my $line = <IN>){
 	chomp $line;
 	# Split the line into an array based on tab delimiters
 	my @segs = split(/\t/, $line);
 	# This counter serves to differentiate the read group IDs on the different aligned bam files
 	$counter{$segs[-1]} += 1;
+	
+	# If we're generating statistics on all of the fastqs, then fork fastqc
+	if($runFQC){
+		# file => fastq file, sample => sample_name, library => library_name, readNum => first_or_second_read, log => simpleLogger
+		my $fqcparser1 = fastqcParser->new('file' => $segs[0], 'sample' => $segs[-1], 'library' => $segs[-2], 'readNum' => 1, 'log' => $log);
+		my $fqcparser2 = fastqcParser->new('file' => $segs[1], 'sample' => $segs[-1], 'library' => $segs[-2], 'readNum' => 1, 'log' => $log);
+		
+		# Running fastqc takes the longest, so we're only going to fork this section
+		fork { sub => \&fastqcWrapper, args => [$fqcparser1, $fastqc], max_proc => $threads };
+		fork { sub => \&fastqcWrapper, args => [$fqcparser2, $fastqc], max_proc => $threads };
+		
+		push(@parsers, ($fqcparser1, $fqcparser2));
+	}	
 	
 	# The command that creates the new alignment process
 	fork { sub => \&runBWAAligner, 
@@ -96,6 +113,25 @@ while(my $line = <IN>){
 }
 close IN;
 waitall;
+$log->Info("Spreadsheet", "All alignment threads completed");
+
+# if we ran fastqc, then start parsing the data
+if($runFQC){
+	$log->Info("Fastqc", "Parsing data from " . (scalar(@parsers)) . " fastqc instances");
+	open(OUT, "> $outputfolder/$spreadsheet.fastqc");
+	my @headers = $parsers[0]->getHeaderArray();
+	print OUT join("\t", @headers);
+	print OUT "\n";
+	foreach my $p (@parsers){
+		$p->parseStats();
+		$p->cleanUp();
+		my @rows = $p->getOutArray();
+		print OUT join("\t", @rows);
+		print OUT "\n";
+	}
+	close OUT;
+	$log->Info("Fastqc", "Quality metric data on fastq files located in: $outputfolder/$spreadsheet.fastqc");
+}
 
 # After generating all of the bams, now do the merger
 $log->Info("Merger", "Beginning bam merger.");
@@ -163,19 +199,25 @@ $log->Info("End", "Run completed successfully");
 $log->Close();
 
 exit;
+sub fastqcWrapper{
+	my ($fastqcParser, $fastqcexe) = @_;
+	
+	$fastqcParser->runFastqc($fastqcexe);
+}
+
 sub samMerge{
 	my ($file_array, $outputdir, $log, $sample) = @_;
 	
 	my $output = "$outputdir/$sample.merged.bam";
 	my $header = headerCreation($file_array, "$outputdir/$sample.header.sam");
 	my $filestr = join(" ", @{$file_array});
-	log->Info("samtools merge -h $header $output $filestr");
+	log->Info("sammerge", "samtools merge -h $header $output $filestr");
 	system("samtools merge -h $header $output $filestr");
-	log->Info("samtools index $output");
+	log->Info("sammerge", "samtools index $output");
 	system("samtools index $output");
 	
 	if(-s $output){
-		log->Info("Cleaning up bam files...");
+		log->Info("sammerge", "Cleaning up bam files...");
 		foreach my $f (@{$file_array}){
 			system("rm $f");
 		}
@@ -244,7 +286,7 @@ sub runBWAAligner{
 	mkdir("$outdir/$base") || print "";
 	
 	# Run the BWA mem command and create a bam file from the sam file
-	print "bwa mem -R '\@RG\\tID:$base.$num\\tLB:$lib\\tPL:ILLUMINA\\tSM:$base\' -v 1 -M $ref $fq1 $fq2 > $bwasam\n";
+	$log->INFO("BWAALIGNER", "bwa mem -R '\@RG\\tID:$base.$num\\tLB:$lib\\tPL:ILLUMINA\\tSM:$base\' -v 1 -M $ref $fq1 $fq2 > $bwasam");
 	system("bwa mem -R '\@RG\\tID:$base.$num\\tLB:$lib\\tPL:ILLUMINA\\tSM:$base\' -v 1 -M $ref $fq1 $fq2 > $bwasam");
 	my $samreader = SamFileReader->new('log' => $log);
 	$samreader->prepSam($bwasam);
@@ -254,6 +296,7 @@ sub runBWAAligner{
 	#print "samtools sort $bwabam $bwasort\n";
 	#system("samtools sort $bwabam $bwasort");
 	#system("samtools index $bwasort.bam");
+	$log->INFO("BWAALIGNER", "$java -jar $picarddir/MarkDuplicates.jar INPUT=$bwabam OUTPUT=$bwadedupbam METRICS_FILE=$bwadedupbam.metrics VALIDATION_STRINGENCY=LENIENT");
 	system("$java -jar $picarddir/MarkDuplicates.jar INPUT=$bwabam OUTPUT=$bwadedupbam METRICS_FILE=$bwadedupbam.metrics VALIDATION_STRINGENCY=LENIENT");
 	
 	# If the bam file exists and is not empty, then remove the sam file
