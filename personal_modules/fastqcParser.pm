@@ -52,14 +52,14 @@ sub runFastqc{
 	
 	# Determine file output 
 	my ($filename, $dirs, $ext) = fileparse($self->file);
-	if($ext eq 'gz'){
+	#if($ext eq 'gz'){
 		my @fsegs = split(/\./, $filename);
 		$self->folder("$dirs/$fsegs[0]" . "_fastqc");
 		$self->zip("$dirs/$fsegs[0]" . "_fastqc.zip");
-	}else{
-		$self->folder("$dirs/$filename" . "_fastqc");
-		$self->zip("$dirs/$filename" . "_fastqc.zip");
-	}
+	#}else{
+	#	$self->folder("$dirs/$filename" . "_fastqc");
+	#	$self->zip("$dirs/$filename" . "_fastqc.zip");
+	#}
 	
 	system("$fastqc -q " . $self->file);
 	$self->log->Info("[FQCPARSE]", "Finished fastqc runtime on file: " . $self->file);
