@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # This is a module designed to provide simple logging functionality to Perl
 
-package Logger;
+package simpleLogger;
 use strict;
 use Mouse;
 use namespace::autoclean;
