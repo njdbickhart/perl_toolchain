@@ -30,13 +30,14 @@ Optional:
 	--threads	Number of threads to fork (default: 1)
 	";
 
-$configfile = "~/.mergedpipeline.cnfg";
+$configfile = "$ENV{HOME}/.mergedpipeline.cnfg";
 $threads = 1;
 	
 GetOptions("config=s" => \$configfile,
 	"fastqs=s" => \$spreadsheet,
 	"output=s" => \$outputfolder,
-	"reference=s" => \$refgenome, 
+	"reference=s" => \$refgenome,
+	"coords=s" => \$fastacoords, 
 	"threads=i" => \$threads);
 	
 if(!defined($spreadsheet) || !defined($outputfolder)){
@@ -50,13 +51,13 @@ $cfg->loadConfigFile($configfile);
 $cfg->checkReqKeys(\@requiredConfig);
 
 # Population config settings
-$picardfolder = $cfg->get("picard");
-$fastqc = $cfg->get("fastqc");
-$javaexe = $cfg->get("java");
-$snpeffjar = $cfg->get("snpeff");
-$runFQC = $cfg->get("runFQC");
-$runSNPEff = $cfg->get("runEFF");
-$runSNPFork = $cfg->get("runSNP");
+$picardfolder = $cfg->getKey("picard");
+$fastqc = $cfg->getKey("fastqc");
+$javaexe = $cfg->getKey("java");
+$snpeffjar = $cfg->getKey("snpeff");
+$runFQC = $cfg->getKey("runFQC");
+$runSNPEff = $cfg->getKey("runEFF");
+$runSNPFork = $cfg->getKey("runSNP");
 
 foreach my $prog ("bwa", "samtools", "vcfutils.pl", "bcftools"){
 	StaticUtils::checkReqs($prog);
@@ -98,16 +99,19 @@ while(my $line = <IN>){
 		my $fqcparser2 = fastqcParser->new('file' => $segs[1], 'sample' => $segs[-1], 'library' => $segs[-2], 'readNum' => 1, 'log' => $log);
 		
 		# Running fastqc takes the longest, so we're only going to fork this section
-		fork { sub => \&fastqcWrapper, args => [$fqcparser1, $fastqc], max_proc => $threads };
-		fork { sub => \&fastqcWrapper, args => [$fqcparser2, $fastqc], max_proc => $threads };
-		
+		#fork { sub => \&fastqcWrapper, args => [$fqcparser1, $fastqc], max_proc => $threads };
+		#fork { sub => \&fastqcWrapper, args => [$fqcparser2, $fastqc], max_proc => $threads };
+		fastqcWrapper($fqcparser1, $fastqc);
+		fastqcWrapper($fqcparser2, $fastqc);
+
 		push(@parsers, ($fqcparser1, $fqcparser2));
 	}	
 	
 	# The command that creates the new alignment process
-	fork { sub => \&runBWAAligner, 
-		args => [$segs[0], $segs[1], $refgenome, $reffai, $outputfolder, $segs[-1], $segs[-2], $counter{$segs[-1]}, $log, $javaexe, $picardfolder], 
-		max_proc => $threads };
+	#fork { sub => \&runBWAAligner, 
+	#	args => [$segs[0], $segs[1], $refgenome, $reffai, $outputfolder, $segs[-1], $segs[-2], $counter{$segs[-1]}, $log, $javaexe, $picardfolder], 
+	#	max_proc => $threads };
+	runBWAAligner($segs[0], $segs[1], $refgenome, $reffai, $outputfolder, $segs[-1], $segs[-2], $counter{$segs[-1]}, $log, $javaexe, $picardfolder);
 	push(@{$bams{$segs[-1]}}, "$outputfolder/$segs[-1]/$segs[-1].$counter{$segs[-1]}.nodup.bam");
 }
 close IN;
@@ -137,10 +141,16 @@ $log->Info("Merger", "Beginning bam merger.");
 my @finalbams;
 foreach my $sample (keys(%bams)){
 	my $finalbam = "$outputfolder/$sample/$sample.merged.bam";
-	fork { sub => \&samMerge,
-		args => [$bams{$sample}, "$outputfolder/$sample", $log, $sample],
-		max_proc => $threads };
+	if(scalar(@{$bams{$sample}}) > 1){
+	#fork { sub => \&samMerge,
+	#	args => [$bams{$sample}, "$outputfolder/$sample", $log, $sample],
+	#	max_proc => $threads };
+	
+	samMerge($bams{$sample}, "$outputfolder/$sample", $log, $sample);
 	push(@finalbams, $finalbam);
+	}else{
+	push(@finalbams, $bams{$sample}->[0]);
+	}
 }
 
 waitall;
@@ -171,8 +181,8 @@ if($runSNPFork){
 	my @vcfsegs;
 	foreach my $c (@coords){
 		my $out = "$outputfolder/vcfs/combined.$c.vcf";
-		fork { sub => \$samexe->GenerateSamtoolsVCF,
-			args => [\@finalbams, $out, $refgenome, $c],
+		fork { sub => \&SamtoolsExecutable::GenerateSamtoolsVCF,
+			args => [$samexe, \@finalbams, $out, $refgenome, $c],
 			max_proc => $threads };
 		push(@vcfsegs, $out);
 	}
@@ -210,13 +220,13 @@ sub samMerge{
 	my $output = "$outputdir/$sample.merged.bam";
 	my $header = headerCreation($file_array, "$outputdir/$sample.header.sam");
 	my $filestr = join(" ", @{$file_array});
-	log->Info("sammerge", "samtools merge -h $header $output $filestr");
+	$log->Info("sammerge", "samtools merge -h $header $output $filestr");
 	system("samtools merge -h $header $output $filestr");
-	log->Info("sammerge", "samtools index $output");
+	$log->Info("sammerge", "samtools index $output");
 	system("samtools index $output");
 	
 	if(-s $output){
-		log->Info("sammerge", "Cleaning up bam files...");
+		$log->Info("sammerge", "Cleaning up bam files...");
 		foreach my $f (@{$file_array}){
 			system("rm $f");
 		}
@@ -285,7 +295,7 @@ sub runBWAAligner{
 	mkdir("$outdir/$base") || print "";
 	
 	# Run the BWA mem command and create a bam file from the sam file
-	$log->INFO("BWAALIGNER", "bwa mem -R '\@RG\\tID:$base.$num\\tLB:$lib\\tPL:ILLUMINA\\tSM:$base\' -v 1 -M $ref $fq1 $fq2 > $bwasam");
+	$log->Info("BWAALIGNER", "bwa mem -R '\@RG\\tID:$base.$num\\tLB:$lib\\tPL:ILLUMINA\\tSM:$base\' -v 1 -M $ref $fq1 $fq2 > $bwasam");
 	system("bwa mem -R '\@RG\\tID:$base.$num\\tLB:$lib\\tPL:ILLUMINA\\tSM:$base\' -v 1 -M $ref $fq1 $fq2 > $bwasam");
 	my $samreader = SamFileReader->new('log' => $log);
 	$samreader->prepSam($bwasam);
@@ -295,7 +305,7 @@ sub runBWAAligner{
 	#print "samtools sort $bwabam $bwasort\n";
 	#system("samtools sort $bwabam $bwasort");
 	#system("samtools index $bwasort.bam");
-	$log->INFO("BWAALIGNER", "$java -jar $picarddir/MarkDuplicates.jar INPUT=$bwabam OUTPUT=$bwadedupbam METRICS_FILE=$bwadedupbam.metrics VALIDATION_STRINGENCY=LENIENT");
+	$log->Info("BWAALIGNER", "$java -jar $picarddir/MarkDuplicates.jar INPUT=$bwabam OUTPUT=$bwadedupbam METRICS_FILE=$bwadedupbam.metrics VALIDATION_STRINGENCY=LENIENT");
 	system("$java -jar $picarddir/MarkDuplicates.jar INPUT=$bwabam OUTPUT=$bwadedupbam METRICS_FILE=$bwadedupbam.metrics VALIDATION_STRINGENCY=LENIENT");
 	
 	# If the bam file exists and is not empty, then remove the sam file

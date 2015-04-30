@@ -54,8 +54,15 @@ sub runFastqc{
 	my ($filename, $dirs, $ext) = fileparse($self->file);
 	#if($ext eq 'gz'){
 		my @fsegs = split(/\./, $filename);
-		$self->folder("$dirs/$fsegs[0]" . "_fastqc");
-		$self->zip("$dirs/$fsegs[0]" . "_fastqc.zip");
+		if($fsegs[-1] eq 'gz'){
+			pop(@fsegs);
+		}
+		if($fsegs[-1] eq 'fastq'){
+			pop(@fsegs);
+		}
+		my $fstr = join("\.", @fsegs);
+		$self->folder("$dirs/$fstr" . "_fastqc");
+		$self->zip("$dirs/$fstr" . "_fastqc.zip");
 	#}else{
 	#	$self->folder("$dirs/$filename" . "_fastqc");
 	#	$self->zip("$dirs/$filename" . "_fastqc.zip");
@@ -70,7 +77,8 @@ sub parseStats{
 	
 	$self->log->Info("[FQCPARSE]", "Parsing fastqc stats on file: " . $self->file);
 	
-	open(IN, "< " . $self->folder . "/fastqc_data.txt") || $self->log->Fatal("[FQCPARSE]", "Error accessing fastqc_data.txt in folder: " . $self->folder . " for file: " . $self->file . "!");
+	my $fqcfile = $self->folder . "/fastqc_data.txt";
+	open(IN, "< $fqcfile") || $self->log->Fatal("[FQCPARSE]", "Error accessing fastqc_data.txt in folder: " . $self->folder . " for file: " . $fqcfile . "!");
 	my $store;
 	my $inloop = 0;
 	while(my $line = <IN>){

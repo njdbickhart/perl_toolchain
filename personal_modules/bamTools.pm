@@ -17,7 +17,7 @@ has 'alternate' => (is => 'rw', isa => 'SamFile', predicate => 'has_bam');
 # Samtools version checking wrapper
 has 'samExe' => (is => 'rw', isa => 'SamtoolsExecutable', lazy => 1, default => sub{SamtoolsExecutable->new()});
 
-has 'log' => (is => 'rw', isa => 'Logger', predicate => 'has_log');
+has 'log' => (is => 'rw', isa => 'simpleLogger', predicate => 'has_log');
 
 # Initiator method to check file and determine if additional processing is needed
 sub prepSam{
@@ -107,7 +107,7 @@ has 'File' => (is => 'ro', isa => 'Str');
 has 'isBam' => (is => 'rw', isa => 'Bool', default => 0);
 has 'isIndexed' => (is => 'rw', isa => 'Bool', default => 0);
 has 'samExe' => (is => 'rw', isa => 'SamtoolsExecutable', lazy => 1, builder => '_buildSamExe');
-has 'log' => (is => 'rw', isa => 'Logger', predicate => 'has_log');
+has 'log' => (is => 'rw', isa => 'simpleLogger', predicate => 'has_log');
 
 sub _buildSamExe{
 	my ($self) = @_;
@@ -151,6 +151,7 @@ sub createBam{
 	my ($self) = @_;
 	my ($filename, $dirs, $suffix) = fileparse($self->File);
 	
+	$filename =~ s/\.sam$//;	
 	my $bam = "$dirs/$filename.bam";
 	if($self->has_log){
 		$self->log->Info("SamFile", "Converting filetype: SAM -> " . $self->File . " to bam");
@@ -215,7 +216,7 @@ use namespace::autoclean;
 use simpleLogger;
 
 has 'isHTSLib' => (is => 'rw', isa => 'Bool', lazy => 1, builder => '_checkVersion');
-has 'log' => (is => 'rw', isa => 'Logger', predicate => 'has_log');
+has 'log' => (is => 'rw', isa => 'simpleLogger', predicate => 'has_log');
 
 # Samples bam and gets read lengths from first reads
 # Very simple implementation -- perhaps I could sample until all read groups are accounted for in the future?
@@ -251,7 +252,7 @@ sub GenerateSamtoolsVCF{
 sub MergeSamtoolsVCF{
 	my ($self, $vcfarray, $output) = @_;
 	my $bcfstr = join(" ", @{$vcfarray});
-	if($self->isHTSlib){
+	if($self->isHTSLib){
 		system("bcftools concat -O b $bcfstr | bcftools filter -O v -o $output -s LOWQUAL -i \'%QUAL>10\' -");
 	}else{
 		system("bcftools cat $bcfstr | vcfutils.pl varFilter -D100 > $output");
@@ -275,10 +276,18 @@ sub SamIdxstats{
 sub SamToBam{
 	my ($self, $sam, $bam, $threads) = @_;
 	
-	if($self->isHTSlib){
+	if($self->isHTSLib){
+		if($self->has_log){
+			$self->log->Info("SamToBam", "samtools view -bS $sam | samtools sort -o $bam -T $bam.pre -\@ $threads - ");
+		}
 		return "samtools view -bS $sam | samtools sort -o $bam -T $bam.pre -\@ $threads - ";
 	}else{
 		my ($filename, $dirs, $suffix) = fileparse($bam);
+		$filename =~ s/\.bam$//;
+		
+		if($self->has_log){
+			$self->log->Info("SamToBam", "samtools view -bS $sam | samtools sort - $dirs/$filename ");
+		}
 		return "samtools view -bS $sam | samtools sort - $dirs/$filename ";
 	}
 }
@@ -292,17 +301,25 @@ sub SamIndex{
 
 sub _checkVersion{
 	my ($self) = @_;
-	checkReqs("samtools");
+	StaticUtils::checkReqs("samtools");
 	
+	my $num;
 	# Now to grep out the version number:
-	open(IN, "samtools | grep 'Version' |") || die "[SAMEXE] Could not open samtools for version checking!\n";
+	open(IN, "samtools 2>&1 2>&1 | grep 'Version' |") || die "[SAMEXE] Could not open samtools for version checking!\n";
 	while(my $line = <IN>){
-		my ($num) = $line =~ /.*Version: (\d{1})\..+/;
-		if($num == 1 || $num == 0){
-			$self->isHTSLib($num);
+		($num) = $line =~ /.*Version: (\d{1})\..+/;
+		#if($num == 1){
+		#	$self->isHTSLib(1);
+		#}
+		#else{
+		#	$self->isHTSLib(0);
+		#}
+		if($self->has_log){
+			$self->log->Info("checkversion:316", "Setting HTSLib variable to $num");
 		}
 	}
 	close IN;
+	return $num;
 }
 
 
