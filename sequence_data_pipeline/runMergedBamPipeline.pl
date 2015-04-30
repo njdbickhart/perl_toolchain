@@ -37,8 +37,7 @@ GetOptions("config=s" => \$configfile,
 	"fastqs=s" => \$spreadsheet,
 	"output=s" => \$outputfolder,
 	"reference=s" => \$refgenome, 
-	"threads=i" => \$threads)
-	|| die "Could not load command line options!\n$usage";
+	"threads=i" => \$threads);
 	
 if(!defined($spreadsheet) || !defined($outputfolder)){
 	print $usage;
