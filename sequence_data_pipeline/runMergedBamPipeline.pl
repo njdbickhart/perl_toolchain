@@ -13,6 +13,9 @@ use Forks::Super;
 use simpleConfigParser;
 use simpleLogger;
 use fastqcParser;
+use threads;
+use threads::shared;
+use threadPool;
 
 my ($configfile, $javaexe, $picardfolder, $outputfolder, $snpeffjar, $spreadsheet, $refgenome, $threads, $fastacoords, $fastqc);
 my ($runSNPFork, $runSNPEff, $runFQC);
@@ -85,6 +88,17 @@ open(IN, "< $spreadsheet") || die "could not open fastq spreadsheet: $spreadshee
 my %counter;
 my %bams; # {sample} -> [] -> sortedbam
 my @parsers;
+my $alignthreads = ($runFQC)? $threads / 3 : $threads; # If we are running fastqc at the same time, then only run one alignment thread per fastqc thread, rounded down
+my $fqcThreads = ($threads / 3) * 2;
+
+# Ensure that we don't have fractional threads!
+if($alignthreads < 1){
+	$alignthreads = 1;
+}
+if($fqcThreads < 1){
+	$fqcThreads = 1;
+}
+my $fqcPool = threadPool->new('maxthreads' => $fqcThreads);
 while(my $line = <IN>){
 	chomp $line;
 	# Split the line into an array based on tab delimiters
@@ -101,9 +115,13 @@ while(my $line = <IN>){
 		# Running fastqc takes the longest, so we're only going to fork this section
 		#fork { sub => \&fastqcWrapper, args => [$fqcparser1, $fastqc], max_proc => $threads };
 		#fork { sub => \&fastqcWrapper, args => [$fqcparser2, $fastqc], max_proc => $threads };
-		fastqcWrapper($fqcparser1, $fastqc);
-		fastqcWrapper($fqcparser2, $fastqc);
-
+		#fastqcWrapper($fqcparser1, $fastqc);
+		#fastqcWrapper($fqcparser2, $fastqc);
+		
+		my $fq1thr = threads->create(sub{$fqcparser1->runFastqc($fastqcexe)});
+		$fqcPool->submit($fq1thr);
+		my $fq2thr = threads->create(sub{$fqcparser2->runFastqc($fastqcexe)});
+		$fqcPool->submit($fq2thr);
 		push(@parsers, ($fqcparser1, $fqcparser2));
 	}	
 	
@@ -116,6 +134,7 @@ while(my $line = <IN>){
 }
 close IN;
 waitall;
+$fqcPool->joinAll();
 $log->Info("Spreadsheet", "All alignment threads completed");
 
 # if we ran fastqc, then start parsing the data
@@ -139,23 +158,28 @@ if($runFQC){
 # After generating all of the bams, now do the merger
 $log->Info("Merger", "Beginning bam merger.");
 my @finalbams;
+my $mergerPool = threadPool->new('maxthreads' => $threads);
 foreach my $sample (keys(%bams)){
 	my $finalbam = "$outputfolder/$sample/$sample.merged.bam";
 	if(scalar(@{$bams{$sample}}) > 1){
-	#fork { sub => \&samMerge,
-	#	args => [$bams{$sample}, "$outputfolder/$sample", $log, $sample],
-	#	max_proc => $threads };
+		#fork { sub => \&samMerge,
+		#	args => [$bams{$sample}, "$outputfolder/$sample", $log, $sample],
+		#	max_proc => $threads };
 	
-	samMerge($bams{$sample}, "$outputfolder/$sample", $log, $sample);
-	push(@finalbams, $finalbam);
+		samMerge($bams{$sample}, "$outputfolder/$sample", $log, $sample);
+		my $thr = threads->create('samMerge', $bams{$sample}, "$outputfolder/$sample", $log, $sample);
+		$mergerPool->submit($thr);
+		push(@finalbams, $finalbam);
 	}else{
-	push(@finalbams, $bams{$sample}->[0]);
+		push(@finalbams, $bams{$sample}->[0]);
 	}
 }
 
 waitall;
+$mergerPool->joinAll();
 $log->Info("Merger", "Finished bam merger.");
 
+my $snpPool = threadPool->new('maxthreads' => $threads);
 if($runSNPFork){
 	$log->Info("SNPFORK", "Beginning Samtools SNP calling methods");
 	mkdir("$outputfolder/vcfs") || $log->Warn("SNPFORK", "Could not create vcf directory!");
@@ -181,13 +205,16 @@ if($runSNPFork){
 	my @vcfsegs;
 	foreach my $c (@coords){
 		my $out = "$outputfolder/vcfs/combined.$c.vcf";
-		fork { sub => \&SamtoolsExecutable::GenerateSamtoolsVCF,
-			args => [$samexe, \@finalbams, $out, $refgenome, $c],
-			max_proc => $threads };
+		#fork { sub => \&SamtoolsExecutable::GenerateSamtoolsVCF,
+		#	args => [$samexe, \@finalbams, $out, $refgenome, $c],
+		#	max_proc => $threads };
+		my $thr = threads->create(sub{$samexe->GenerateSamtoolsVCF(\@finalbams, $out, $refgenome, $c);});
+		$snpPool->submit($thr);
 		push(@vcfsegs, $out);
 	}
 	
 	waitall;
+	$snpPool->joinAll();
 	
 	$log->Info("SNPFORK", "Beginning bam merger");
 	$samexe->MergeSamtoolsVCF(\@vcfsegs, "$outputfolder/vcf/combined.vcf");
