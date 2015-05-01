@@ -53,6 +53,7 @@ my $cfg = simpleConfigParser->new();
 $cfg->loadConfigFile($configfile);
 $cfg->checkReqKeys(\@requiredConfig);
 
+
 # Population config settings
 $picardfolder = $cfg->getKey("picard");
 $fastqc = $cfg->getKey("fastqc");
@@ -74,6 +75,10 @@ if(! -d $outputfolder){
 my $log = simpleLogger->new('logFileBaseStr' => 'MergedBamPipeline');
 $log->OpenLogger($outputfolder);
 $log->Info("Start", "Began pipeline run for spreadsheet: $spreadsheet in $outputfolder using $threads threads");
+
+$log->Info("Start", "Using config file: $configfile");
+$log->Info("Start", "Exes: picard-$picardfolder fastqc-$fastqc java-$javaexe snpeff-$snpeffjar");
+$log->Info("Start", "Run Settings: runFQC-$runFQC runSNPEFF-$runSNPEff runSNPFork-$runSNPFork");
 
 # Check the reference genome and see if it has been indexed yet by samtools. If not, do that indexing
 my $reffai = "$refgenome.fai";
@@ -118,9 +123,9 @@ while(my $line = <IN>){
 		#fastqcWrapper($fqcparser1, $fastqc);
 		#fastqcWrapper($fqcparser2, $fastqc);
 		
-		my $fq1thr = threads->create(sub{$fqcparser1->runFastqc($fastqcexe)});
+		my $fq1thr = threads->create(sub{$fqcparser1->runFastqc($fastqc)});
 		$fqcPool->submit($fq1thr);
-		my $fq2thr = threads->create(sub{$fqcparser2->runFastqc($fastqcexe)});
+		my $fq2thr = threads->create(sub{$fqcparser2->runFastqc($fastqc)});
 		$fqcPool->submit($fq2thr);
 		push(@parsers, ($fqcparser1, $fqcparser2));
 	}	

@@ -19,15 +19,15 @@ has 'maxthreads' => (is => 'ro', isa => 'Int', required => 1);
 sub submit{
 	my ($self, $thread) = @_;
 	
-	$self->queue($thread);
+	$self->enqueue($thread);
 	if($self->num >= $self->maxthreads){
 		while(1){
-			my @joinable = $threads->list(threads::joinable);
+			my @joinable = threads->list(threads::joinable);
 			my @remove;
 			if(scalar(@joinable) > 0){
 				for(my $x = 0; $x < $self->num; $x++){
-					if($self->thr->is_joinable()){
-						$self->thr->join();
+					if($self->thr($x)->is_joinable()){
+						$self->thr($x)->join();
 						$remove[$x] = 1;
 					}else{
 						$remove[$x] = 0;
