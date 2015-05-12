@@ -104,6 +104,7 @@ if($fqcThreads < 1){
 	$fqcThreads = 1;
 }
 my $fqcPool = threadPool->new('maxthreads' => $fqcThreads);
+my $alnPool = threadPool->new('maxthreads' => $alignthreads);
 while(my $line = <IN>){
 	chomp $line;
 	# Split the line into an array based on tab delimiters
@@ -134,12 +135,15 @@ while(my $line = <IN>){
 	#fork { sub => \&runBWAAligner, 
 	#	args => [$segs[0], $segs[1], $refgenome, $reffai, $outputfolder, $segs[-1], $segs[-2], $counter{$segs[-1]}, $log, $javaexe, $picardfolder], 
 	#	max_proc => $threads };
-	runBWAAligner($segs[0], $segs[1], $refgenome, $reffai, $outputfolder, $segs[-1], $segs[-2], $counter{$segs[-1]}, $log, $javaexe, $picardfolder);
+	# runBWAAligner($segs[0], $segs[1], $refgenome, $reffai, $outputfolder, $segs[-1], $segs[-2], $counter{$segs[-1]}, $log, $javaexe, $picardfolder);
+	my $alnthr = threads->create('runBWAAligner', $segs[0], $segs[1], $refgenome, $reffai, $outputfolder, $segs[-1], $segs[-2], $counter{$segs[-1]}, $log, $javaexe, $picardfolder);
+	$alnPool->submit($alnthr);
 	push(@{$bams{$segs[-1]}}, "$outputfolder/$segs[-1]/$segs[-1].$counter{$segs[-1]}.nodup.bam");
 }
 close IN;
 waitall;
 $fqcPool->joinAll();
+$alnPool->joinAll();
 $log->Info("Spreadsheet", "All alignment threads completed");
 
 # if we ran fastqc, then start parsing the data
