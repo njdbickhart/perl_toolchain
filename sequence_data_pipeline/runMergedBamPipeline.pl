@@ -93,8 +93,8 @@ open(IN, "< $spreadsheet") || die "could not open fastq spreadsheet: $spreadshee
 my %counter;
 my %bams; # {sample} -> [] -> sortedbam
 my @parsers;
-my $alignthreads = ($runFQC)? $threads / 3 : $threads; # If we are running fastqc at the same time, then only run one alignment thread per fastqc thread, rounded down
-my $fqcThreads = ($threads / 3) * 2;
+my $alignthreads = ($runFQC)? int($threads / 3) : $threads; # If we are running fastqc at the same time, then only run one alignment thread per fastqc thread, rounded down
+my $fqcThreads = int(($threads / 3) * 2);
 
 # Ensure that we don't have fractional threads!
 if($alignthreads < 1){
