@@ -52,6 +52,9 @@ sub runFastqc{
 	
 	# Determine file output 
 	my ($filename, $dirs, $ext) = fileparse($self->file);
+	if($dirs eq ""){
+		$self->log->Fatal("[FQCPARSE]", "Could not find path folders for files!!!");
+	}
 	#if($ext eq 'gz'){
 		my @fsegs = split(/\./, $filename);
 		if($fsegs[-1] eq 'gz'){
@@ -61,8 +64,10 @@ sub runFastqc{
 			pop(@fsegs);
 		}
 		my $fstr = join("\.", @fsegs);
-		$self->folder("$dirs/$fstr" . "_fastqc");
-		$self->zip("$dirs/$fstr" . "_fastqc.zip");
+		my $fqcfold = "$dirs/$fstr" . "_fastqc";
+		my $fqczip = "$dirs/$fstr" . "_fastqc.zip";
+		$self->folder($fqcfold);
+		$self->zip($fqczip);
 	#}else{
 	#	$self->folder("$dirs/$filename" . "_fastqc");
 	#	$self->zip("$dirs/$filename" . "_fastqc.zip");
@@ -76,7 +81,21 @@ sub parseStats{
 	my ($self) = @_;
 	
 	$self->log->Info("[FQCPARSE]", "Parsing fastqc stats on file: " . $self->file);
-	
+
+	my ($filename, $dirs, $ext) = fileparse($self->file);	
+	my @fsegs = split(/\./, $filename);
+        if($fsegs[-1] eq 'gz'){
+              pop(@fsegs);
+        }
+                if($fsegs[-1] eq 'fastq'){
+                        pop(@fsegs);
+                }
+                my $fstr = join("\.", @fsegs);
+                my $fqcfold = "$dirs/$fstr" . "_fastqc";
+                my $fqczip = "$dirs/$fstr" . "_fastqc.zip";
+                $self->folder($fqcfold);
+                $self->zip($fqczip);
+
 	my $fqcfile = $self->folder . "/fastqc_data.txt";
 	open(IN, "< $fqcfile") || $self->log->Fatal("[FQCPARSE]", "Error accessing fastqc_data.txt in folder: " . $self->folder . " for file: " . $fqcfile . "!");
 	my $store;

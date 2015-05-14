@@ -19,13 +19,14 @@ OPTIONAL:
 \n";
 
 my %opts;
-getopt('fcoemx', \%opts);
+getopt('fcoex', \%opts);
 
 unless(defined($opts{'f'}) && defined($opts{'c'})){
 	print $usage;
 	exit;
 }
 
+my $mbool = (defined($opts{'m'}))? 1 : 0;
 my $worker = ColumnCounter->new('colnum' => $opts{'c'}, 'mkdwn' => $opts{'m'});
 
 if(defined($opts{'e'})){
@@ -102,22 +103,28 @@ sub writeOut{
 	
 	if($self->mkdwn){
 		# For tidiness with markdown, we want proper column spacing
-		my $collen = 0;
+		my $collen = 5;
+		my $conlen = 5;
 		foreach my $k (@sortedkeys){
 			if(length($k) > $collen){
 				$collen = length($k);
 			}
+			if(length($self->Get($k)) > $conlen){
+				$conlen = length($self->Get($k));
+			}
 		}
 		$collen++;
+		$conlen++;
 		my $sepstr = '-' x ($collen - 1);
-		print {$fh} sprintf("\|%-*s\|%*s\|\n", $collen, "Entry", $collen, "Count");
-		print {$fh} sprintf("\|\:%s\|%s\:\|\n", $sepstr, $sepstr);
+		my $sepcon = '-' x ($conlen - 1);
+		print {$fh} sprintf("\|%-*s\|%*s\|\n", $collen, "Entry", $conlen, "Count");
+		print {$fh} sprintf("\|\:%s\|%s\:\|\n", $sepstr, $sepcon);
 		foreach my $k (@sortedkeys){
 			my $kvalue = $k;
 			if($k eq ''){
 				$kvalue = "<Null>";
 			}
-			print {$fh} sprintf("\|%-*s\|%*d\|\n", $collen, $kvalue, $collen, $self->Get($k));
+			print {$fh} sprintf("\|%-*s\|%*d\|\n", $collen, $kvalue, $conlen, $self->Get($k));
 		}
 	}else{
 		print {$fh} "Entry\tCount\n";

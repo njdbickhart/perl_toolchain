@@ -7,6 +7,7 @@ use Mouse;
 use strict;
 use File::Basename;
 use namespace::autoclean;
+use threads::shared;
 use simpleLogger;
 
 has 'inputFile' => (is => 'rw', isa => 'SamFile');
@@ -18,6 +19,17 @@ has 'alternate' => (is => 'rw', isa => 'SamFile', predicate => 'has_bam');
 has 'samExe' => (is => 'rw', isa => 'SamtoolsExecutable', lazy => 1, default => sub{SamtoolsExecutable->new()});
 
 has 'log' => (is => 'rw', isa => 'simpleLogger', predicate => 'has_log');
+
+around 'new' => sub {
+        my $orig = shift;
+        my $class = shift;
+        my $self = $class->$orig(@_);
+        my $shared_self : shared = shared_clone($self);
+
+        # here the blessed() already be the version in threads::shared
+        
+        return $shared_self;
+};
 
 # Initiator method to check file and determine if additional processing is needed
 sub prepSam{
@@ -101,6 +113,7 @@ use Mouse;
 use strict;
 use File::Basename;
 use namespace::autoclean;
+use threads::shared;
 use simpleLogger;
 
 has 'File' => (is => 'ro', isa => 'Str');
@@ -108,6 +121,18 @@ has 'isBam' => (is => 'rw', isa => 'Bool', default => 0);
 has 'isIndexed' => (is => 'rw', isa => 'Bool', default => 0);
 has 'samExe' => (is => 'rw', isa => 'SamtoolsExecutable', lazy => 1, builder => '_buildSamExe');
 has 'log' => (is => 'rw', isa => 'simpleLogger', predicate => 'has_log');
+
+
+around 'new' => sub {
+        my $orig = shift;
+        my $class = shift;
+        my $self = $class->$orig(@_);
+        my $shared_self : shared = shared_clone($self);
+
+        # here the blessed() already be the version in threads::shared
+        
+        return $shared_self;
+};
 
 sub _buildSamExe{
 	my ($self) = @_;
@@ -212,11 +237,24 @@ use Mouse;
 #use StaticUtils;
 use File::Basename;
 use strict;
+use threads::shared;
 use namespace::autoclean;
 use simpleLogger;
 
 has 'isHTSLib' => (is => 'rw', isa => 'Bool', lazy => 1, builder => '_checkVersion');
 has 'log' => (is => 'rw', isa => 'simpleLogger', predicate => 'has_log');
+
+
+around 'new' => sub {
+        my $orig = shift;
+        my $class = shift;
+        my $self = $class->$orig(@_);
+        my $shared_self : shared = shared_clone($self);
+
+        # here the blessed() already be the version in threads::shared
+        
+        return $shared_self;
+};
 
 # Samples bam and gets read lengths from first reads
 # Very simple implementation -- perhaps I could sample until all read groups are accounted for in the future?

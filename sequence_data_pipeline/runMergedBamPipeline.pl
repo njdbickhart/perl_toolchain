@@ -73,6 +73,7 @@ if(! -d $outputfolder){
 
 # Generate log file
 my $log = simpleLogger->new('logFileBaseStr' => 'MergedBamPipeline');
+
 $log->OpenLogger($outputfolder);
 $log->Info("Start", "Began pipeline run for spreadsheet: $spreadsheet in $outputfolder using $threads threads");
 
@@ -115,19 +116,21 @@ while(my $line = <IN>){
 	# If we're generating statistics on all of the fastqs, then fork fastqc
 	if($runFQC){
 		# file => fastq file, sample => sample_name, library => library_name, readNum => first_or_second_read, log => simpleLogger
-		my $fqcparser1 = fastqcParser->new('file' => $segs[0], 'sample' => $segs[-1], 'library' => $segs[-2], 'readNum' => 1, 'log' => $log);
-		my $fqcparser2 = fastqcParser->new('file' => $segs[1], 'sample' => $segs[-1], 'library' => $segs[-2], 'readNum' => 1, 'log' => $log);
+		my $fqcparser1 : shared = fastqcParser->new('file' => $segs[0], 'sample' => $segs[-1], 'library' => $segs[-2], 'readNum' => 1, 'log' => $log);
+		my $fqcparser2 : shared = fastqcParser->new('file' => $segs[1], 'sample' => $segs[-1], 'library' => $segs[-2], 'readNum' => 1, 'log' => $log);
 		
 		# Running fastqc takes the longest, so we're only going to fork this section
 		#fork { sub => \&fastqcWrapper, args => [$fqcparser1, $fastqc], max_proc => $threads };
 		#fork { sub => \&fastqcWrapper, args => [$fqcparser2, $fastqc], max_proc => $threads };
 		#fastqcWrapper($fqcparser1, $fastqc);
 		#fastqcWrapper($fqcparser2, $fastqc);
-		
+		#share($fqcparser1);
+		#share($fqcparser2);
 		my $fq1thr = threads->create(sub{$fqcparser1->runFastqc($fastqc)});
-		$fqcPool->submit($fq1thr);
+		$fqcPool->submit($fq1thr, 1);
 		my $fq2thr = threads->create(sub{$fqcparser2->runFastqc($fastqc)});
-		$fqcPool->submit($fq2thr);
+		$fqcPool->submit($fq2thr, 1);
+		
 		push(@parsers, ($fqcparser1, $fqcparser2));
 	}	
 	
@@ -141,8 +144,8 @@ while(my $line = <IN>){
 	push(@{$bams{$segs[-1]}}, "$outputfolder/$segs[-1]/$segs[-1].$counter{$segs[-1]}.nodup.bam");
 }
 close IN;
-waitall;
-$fqcPool->joinAll();
+#waitall;
+$fqcPool->joinAll(1);
 $alnPool->joinAll();
 $log->Info("Spreadsheet", "All alignment threads completed");
 
@@ -175,7 +178,7 @@ foreach my $sample (keys(%bams)){
 		#	args => [$bams{$sample}, "$outputfolder/$sample", $log, $sample],
 		#	max_proc => $threads };
 	
-		samMerge($bams{$sample}, "$outputfolder/$sample", $log, $sample);
+		#samMerge($bams{$sample}, "$outputfolder/$sample", $log, $sample);
 		my $thr = threads->create('samMerge', $bams{$sample}, "$outputfolder/$sample", $log, $sample);
 		$mergerPool->submit($thr);
 		push(@finalbams, $finalbam);
@@ -210,7 +213,7 @@ if($runSNPFork){
 		close IN;
 	}
 	
-	my $samexe = SamtoolsExecutable->new('log' => $log);
+	my $samexe : shared = SamtoolsExecutable->new('log' => $log);
 	my @vcfsegs;
 	foreach my $c (@coords){
 		my $out = "$outputfolder/vcfs/combined.$c.vcf";
