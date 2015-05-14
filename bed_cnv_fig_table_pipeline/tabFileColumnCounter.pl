@@ -69,12 +69,14 @@ if(scalar(@files) == 1){
 			my $filename = "File" . ($x + 1);
 			print OUT "$filename\:  $files[$x]\n";
 		}
+		print OUT "\n";
 		close OUT;
 	}else{
 		for(my $x = 0; $x < scalar(@files); $x++){
 			my $filename = "File" . ($x + 1);
 			print "$filename\:  $files[$x]\n";
 		}
+		print "\n";
 	}
 	
 	$manager->PrintResults();
@@ -287,6 +289,8 @@ use namespace::autoclean;
 
 with 'AbsSummaryTable';
 
+has 'name' => (is => 'ro', isa => 'Str', required => 1);
+
 has 'entryTab' => (traits => ['Array'], is => 'rw', isa => 'ArrayRef[Str]', default => sub{[]},
 	handles => {
 		'addEntry' => 'push',
@@ -382,9 +386,8 @@ __PACKAGE__->meta->make_immutable;
 
 package AbsSummaryTable;
 use Mouse::Role;
-use namespace::autoclean;
+#use namespace::autoclean;
 
-has 'name' => (is => 'ro', isa => 'Str', required => 1);
 
 requires 'formatOutput';
 requires 'formatHeader';
