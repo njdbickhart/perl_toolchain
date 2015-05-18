@@ -252,19 +252,19 @@ sub PrintResults{
 	
 	my @output;
 	my $maxlen = 0;
-	my $blank;
+	my @blank;
 	foreach my $k (@sortedkeys){
 		if($self->getTable($k)->numEntry > $maxlen){
 			$maxlen = $self->getTable($k)->numEntry;
 		}
 		push(@output, $self->getTable($k)->formatOutput($self->mkdwn));
-		$blank = $self->getTable($k)->formatBlank($self->mkdwn);
+		push(@blank, $self->getTable($k)->formatBlank($self->mkdwn));
 	}
 	
 	for( my $j = 0; $j < $maxlen; $j++){
 		for( my $i = 0; $i < scalar(@output); $i++){
-			if($j > scalar(@{$output[$i]})){
-				print {$fh} $blank;
+			if($j >= scalar(@{$output[$i]})){
+				print {$fh} $blank[$i];
 			}else{
 				print {$fh} $output[$i]->[$j];
 			}

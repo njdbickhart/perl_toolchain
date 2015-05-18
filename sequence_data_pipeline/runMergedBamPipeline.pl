@@ -106,10 +106,11 @@ if($fqcThreads < 1){
 	$fqcThreads = 1;
 }
 
-my $fqcSpreadsheet = "$outputfolder/$spreadsheet.fastqc";
+my $spreadsheetBase = basename($spreadsheet);
+my $fqcSpreadsheet = "$outputfolder/$spreadsheetBase.fastqc";
 if($runFQC){
 	my @headers = fastqcParser->getHeaderArray(); 
-	open(OUT, "> $fqcSpreadsheet") || $log->Fatal("[Main]", "Could not create fastqc Spreadsheet!\n");
+	open(OUT, "> $fqcSpreadsheet") || $log->Fatal("[Main]", "Could not create fastqc Spreadsheet: $outputfolder/$spreadsheetBase.fastqc\n");
 	print OUT join("\t", @headers); 
 	print OUT "\n";
 	close OUT;
@@ -214,8 +215,8 @@ if($runSNPFork){
 		
 		push(@bcfs, $bcf);
 		
-		$log->Info("[Main]", "Submit: runSamtoolsBCFCaller, args \=\> $ref, $bcf, $bamstr, $c, $ishts");
-		fork { sub => \&runSamtoolsBCFCaller, args => [$ref, $bcf, $bamstr, $c, $ishts], max_proc => $threads };
+		$log->Info("[Main]", "Submit: runSamtoolsBCFCaller, args \=\> $refgenome, $bcf, $bamstr, $c, $ishts");
+		fork { sub => \&runSamtoolsBCFCaller, args => [$refgenome, $bcf, $bamstr, $c, $ishts], max_proc => $threads };
 
 	}
 	
@@ -243,7 +244,7 @@ exit;
 sub fastqcWrapper{
 	my ($file, $sample, $lib, $num, $log, $outfile, $fastqcexe) = @_;
 	
-	my $fqcparser = fastqcParser->new('file' => $file, 'sample' => $sample, 'library' => $lib, 'readNum' => $num, 'log' => $log);
+	my $fqcParser = fastqcParser->new('file' => $file, 'sample' => $sample, 'library' => $lib, 'readNum' => $num, 'log' => $log);
 	$fqcParser->runFastqc($fastqcexe);
 	$fqcParser->parseStats();
 	$fqcParser->cleanUp();
@@ -345,6 +346,9 @@ sub runBWAAligner{
 	$log->Info("BWAALIGNER", "$java -jar $picarddir/MarkDuplicates.jar INPUT=$bwabam OUTPUT=$bwadedupbam METRICS_FILE=$bwadedupbam.metrics VALIDATION_STRINGENCY=LENIENT");
 	system("$java -jar $picarddir/MarkDuplicates.jar INPUT=$bwabam OUTPUT=$bwadedupbam METRICS_FILE=$bwadedupbam.metrics VALIDATION_STRINGENCY=LENIENT");
 	
+	$log->Info("BWAALIGNER", "samtools index $bwadedupbam");
+	system("samtools index $bwadedupbam");
+	
 	# If the bam file exists and is not empty, then remove the sam file
 	if( -s $bwabam){
 		system("rm $bwasam");
@@ -355,6 +359,7 @@ sub runBWAAligner{
 	# I just need to remove the base bam after marking duplicates
 	if( -s $bwadedupbam){
 		system("rm $bwabam");
+		system("rm $bwabam.bai");
 		$log->Info("BWAALIGNER", "Completed noduplicate bam. Removing BAM file");
 	}
 }
@@ -362,7 +367,7 @@ sub runBWAAligner{
 sub concatBCFtoVCF{
 	my ($bcfs, $mergebcf, $vcf, $ishts) = @_;
 	
-	my $bcfstr = join(' ', @bcfs);
+	my $bcfstr = join(' ', @{$bcfs});
 	if($ishts){
 		system("bcftools concat -o $mergebcf -O b $bcfstr");
 		system("bcftools filter -O v -o $vcf -s LOWQUAL -i \'%QUAL>10\' $mergebcf");
