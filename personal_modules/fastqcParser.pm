@@ -164,6 +164,21 @@ sub getOutArray{
 	return @output;
 }
 
+sub writeOutArray{
+	my ($self, $outfile) = @_;
+	
+	# This is going to be a process-safe write
+	my @outArray = $self->getOutArray();
+	
+	open(OUT, ">> $outfile") || $self->log->Fatal("[FQCParse]", "Could not open output for writing!");
+	flock(OUT, 2);
+	print OUT join("\t", @outArray);
+	print OUT "\n";
+	flock(OUT, 8);
+	close OUT;
+	
+}
+
 sub cleanUp{
 	my ($self, $czip) = @_;
 	

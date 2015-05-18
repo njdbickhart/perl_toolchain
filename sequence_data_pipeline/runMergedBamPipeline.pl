@@ -13,13 +13,14 @@ use Forks::Super;
 use simpleConfigParser;
 use simpleLogger;
 use fastqcParser;
-use threads;
-use threads::shared;
-use threadPool;
+#use threads;
+#use threads::shared;
+#use threadPool;
 
 my ($configfile, $javaexe, $picardfolder, $outputfolder, $snpeffjar, $spreadsheet, $refgenome, $threads, $fastacoords, $fastqc);
 my ($runSNPFork, $runSNPEff, $runFQC);
 my @requiredConfig = ("java", "picard", "snpeff", "fastqc", "runSNP", "runEFF", "runFQC");
+my $scriptdir = dirname(__FILE__);
 
 my $usage = "perl $0 --fastqs <spreadsheet to be processed> --output <base output folder> --reference <reference genome fasta>
 Arguments:
@@ -103,7 +104,17 @@ if($alignthreads < 1){
 if($fqcThreads < 1){
 	$fqcThreads = 1;
 }
-my $fqcPool = threadPool->new('maxthreads' => $fqcThreads);
+
+my $fqcSpreadsheet = "$outputfolder/$spreadsheet.fastqc";
+if($runFQC){
+	my @headers = fastqcParser->getHeaderArray(); 
+	open(OUT, "> $fqcSpreadsheet") || $log->Fatal("[Main]", "Could not create fastqc Spreadsheet!\n");
+	print OUT join("\t", @headers); 
+	print OUT "\n";
+	close OUT;
+}
+
+#my $fqcPool = threadPool->new('maxthreads' => $fqcThreads);
 while(my $line = <IN>){
 	chomp $line;
 	# Split the line into an array based on tab delimiters
@@ -114,66 +125,49 @@ while(my $line = <IN>){
 	# If we're generating statistics on all of the fastqs, then fork fastqc
 	if($runFQC){
 		# file => fastq file, sample => sample_name, library => library_name, readNum => first_or_second_read, log => simpleLogger
-		my $fqcparser1 = fastqcParser->new('file' => $segs[0], 'sample' => $segs[-1], 'library' => $segs[-2], 'readNum' => 1, 'log' => $log);
-		my $fqcparser2 = fastqcParser->new('file' => $segs[1], 'sample' => $segs[-1], 'library' => $segs[-2], 'readNum' => 1, 'log' => $log);
+		#my $fqcparser1 = fastqcParser->new('file' => $segs[0], 'sample' => $segs[-1], 'library' => $segs[-2], 'readNum' => 1, 'log' => $log);
+		#my $fqcparser2 = fastqcParser->new('file' => $segs[1], 'sample' => $segs[-1], 'library' => $segs[-2], 'readNum' => 1, 'log' => $log);
 		
 		# Running fastqc takes the longest, so we're only going to fork this section
-		#fork { sub => \&fastqcWrapper, args => [$fqcparser1, $fastqc], max_proc => $threads };
-		#fork { sub => \&fastqcWrapper, args => [$fqcparser2, $fastqc], max_proc => $threads };
+		# my ($file, $sample, $lib, $num, $log, $outfile, $fastqcexe) = @_;
+		fork { sub => \&fastqcWrapper, args => [$segs[0], $segs[-1], $segs[-2], 1, $log, $fqcSpreadsheet, $fastqc], max_proc => $fqcThreads };
+		fork { sub => \&fastqcWrapper, args => [$segs[1], $segs[-1], $segs[-2], 2, $log, $fqcSpreadsheet, $fastqc], max_proc => $fqcThreads };
 		#fastqcWrapper($fqcparser1, $fastqc);
 		#fastqcWrapper($fqcparser2, $fastqc);
 		
-		my $fq1thr = threads->create(sub{$fqcparser1->runFastqc($fastqc)});
-		$fqcPool->submit($fq1thr);
-		my $fq2thr = threads->create(sub{$fqcparser2->runFastqc($fastqc)});
-		$fqcPool->submit($fq2thr);
-		push(@parsers, ($fqcparser1, $fqcparser2));
 	}	
 	
 	# The command that creates the new alignment process
-	#fork { sub => \&runBWAAligner, 
-	#	args => [$segs[0], $segs[1], $refgenome, $reffai, $outputfolder, $segs[-1], $segs[-2], $counter{$segs[-1]}, $log, $javaexe, $picardfolder], 
-	#	max_proc => $threads };
-	runBWAAligner($segs[0], $segs[1], $refgenome, $reffai, $outputfolder, $segs[-1], $segs[-2], $counter{$segs[-1]}, $log, $javaexe, $picardfolder);
+	fork { sub => \&runBWAAligner, 
+		args => [$segs[0], $segs[1], $refgenome, $reffai, $outputfolder, $segs[-1], $segs[-2], $counter{$segs[-1]}, $log, $javaexe, $picardfolder], 
+		max_proc => $threads };
+	#runBWAAligner($segs[0], $segs[1], $refgenome, $reffai, $outputfolder, $segs[-1], $segs[-2], $counter{$segs[-1]}, $log, $javaexe, $picardfolder);
 	push(@{$bams{$segs[-1]}}, "$outputfolder/$segs[-1]/$segs[-1].$counter{$segs[-1]}.nodup.bam");
 }
 close IN;
 waitall;
-$fqcPool->joinAll();
+#$fqcPool->joinAll();
 $log->Info("Spreadsheet", "All alignment threads completed");
 
 # if we ran fastqc, then start parsing the data
 if($runFQC){
-	$log->Info("Fastqc", "Parsing data from " . (scalar(@parsers)) . " fastqc instances");
-	open(OUT, "> $outputfolder/$spreadsheet.fastqc");
-	my @headers = $parsers[0]->getHeaderArray();
-	print OUT join("\t", @headers);
-	print OUT "\n";
-	foreach my $p (@parsers){
-		$p->parseStats();
-		$p->cleanUp();
-		my @rows = $p->getOutArray();
-		print OUT join("\t", @rows);
-		print OUT "\n";
-	}
-	close OUT;
 	$log->Info("Fastqc", "Quality metric data on fastq files located in: $outputfolder/$spreadsheet.fastqc");
 }
 
 # After generating all of the bams, now do the merger
 $log->Info("Merger", "Beginning bam merger.");
 my @finalbams;
-my $mergerPool = threadPool->new('maxthreads' => $threads);
+
 foreach my $sample (keys(%bams)){
 	my $finalbam = "$outputfolder/$sample/$sample.merged.bam";
 	if(scalar(@{$bams{$sample}}) > 1){
-		#fork { sub => \&samMerge,
-		#	args => [$bams{$sample}, "$outputfolder/$sample", $log, $sample],
-		#	max_proc => $threads };
+		fork { sub => \&samMerge,
+			args => [$bams{$sample}, "$outputfolder/$sample", $log, $sample],
+			max_proc => $threads };
 	
-		samMerge($bams{$sample}, "$outputfolder/$sample", $log, $sample);
-		my $thr = threads->create('samMerge', $bams{$sample}, "$outputfolder/$sample", $log, $sample);
-		$mergerPool->submit($thr);
+		#samMerge($bams{$sample}, "$outputfolder/$sample", $log, $sample);
+		#my $thr = threads->create('samMerge', $bams{$sample}, "$outputfolder/$sample", $log, $sample);
+		#$mergerPool->submit($thr);
 		push(@finalbams, $finalbam);
 	}else{
 		push(@finalbams, $bams{$sample}->[0]);
@@ -181,10 +175,10 @@ foreach my $sample (keys(%bams)){
 }
 
 waitall;
-$mergerPool->joinAll();
+#$mergerPool->joinAll();
 $log->Info("Merger", "Finished bam merger.");
 
-my $snpPool = threadPool->new('maxthreads' => $threads);
+#my $snpPool = threadPool->new('maxthreads' => $threads);
 if($runSNPFork){
 	$log->Info("SNPFORK", "Beginning Samtools SNP calling methods");
 	mkdir("$outputfolder/vcfs") || $log->Warn("SNPFORK", "Could not create vcf directory!");
@@ -207,27 +201,27 @@ if($runSNPFork){
 	}
 	
 	my $samexe = SamtoolsExecutable->new('log' => $log);
-	my @vcfsegs;
-	foreach my $c (@coords){
-		my $out = "$outputfolder/vcfs/combined.$c.vcf";
-		#fork { sub => \&SamtoolsExecutable::GenerateSamtoolsVCF,
-		#	args => [$samexe, \@finalbams, $out, $refgenome, $c],
-		#	max_proc => $threads };
-		my $thr = threads->create(sub{$samexe->GenerateSamtoolsVCF(\@finalbams, $out, $refgenome, $c);});
-		$snpPool->submit($thr);
-		push(@vcfsegs, $out);
+	my $ishts = $samexe->isHTSLib();
+	my @bcfs;
+	my $bamstr = join(",", @finalbams);
+	foreach my $c (@coords){	
+		my $bcf = "$outputfolder/vcfs/combined.samtools.$c.bcf";
+		
+		push(@bcfs, $bcf);
+		
+		$log->Info("[Main]", "Submit: runSamtoolsBCFCaller, args \=\> $ref, $bcf, $bamstr, $c, $ishts");
+		fork { sub => \&runSamtoolsBCFCaller, args => [$ref, $bcf, $bamstr, $c, $ishts], max_proc => $threads };
 	}
 	
-	waitall;
-	$snpPool->joinAll();
+	waitall();
 	
-	$log->Info("SNPFORK", "Beginning bam merger");
-	$samexe->MergeSamtoolsVCF(\@vcfsegs, "$outputfolder/vcf/combined.vcf");
+	# merge files and call variants
+	concatBCFtoVCF(\@bcfs, "$outputfolder/vcfs/combined.samtools.merged.bcf", "$outputfolder/vcfs/combined.samtools.filtered.vcf", $ishts);
 	
-	if(-s "$outputfolder/vcf/combined.vcf"){
-		$log->Info("SNPFORK", "Removing temporary vcf files");
-		foreach my $v (@vcfsegs){
-			system("rm $v");
+	# Check to see if the vcf exists and is not empty, then delete bcfs
+	if( -s "$outputfolder/vcfs/combined.samtools.filtered.vcf"){
+		for(my $x = 0; $x < scalar(@bcfs); $x++){
+			system("rm $bcfs[$x]");
 		}
 	}
 	
@@ -241,9 +235,14 @@ $log->Close();
 
 exit;
 sub fastqcWrapper{
-	my ($fastqcParser, $fastqcexe) = @_;
+	my ($file, $sample, $lib, $num, $log, $outfile, $fastqcexe) = @_;
 	
-	$fastqcParser->runFastqc($fastqcexe);
+	my $fqcparser = fastqcParser->new('file' => $file, 'sample' => $sample, 'library' => $lib, 'readNum' => $num, 'log' => $log);
+	$fqcParser->runFastqc($fastqcexe);
+	$fqcParser->parseStats();
+	$fqcParser->cleanUp();
+	
+	$fqcParser->writeOutArray($outfile);
 }
 
 sub samMerge{
@@ -352,4 +351,31 @@ sub runBWAAligner{
 		system("rm $bwabam");
 		$log->Info("BWAALIGNER", "Completed noduplicate bam. Removing BAM file");
 	}
+}
+
+sub concatBCFtoVCF{
+	my ($bcfs, $mergebcf, $vcf, $ishts) = @_;
+	
+	my $bcfstr = join(' ', @bcfs);
+	if($ishts){
+		system("bcftools concat -o $mergebcf -O b $bcfstr");
+		system("bcftools filter -O v -o $vcf -s LOWQUAL -i \'%QUAL>10\' $mergebcf");
+	}else{
+		system("bcftools cat $bcfstr > $mergebcf");
+		system("bcftools view $mergebcf | vcfutils.pl varFilter -D100 > $vcf");
+	}
+}
+
+sub runSamtoolsBCFCaller{
+	my ($ref, $bcf, $bamstr, $chr, $ishts) = @_;
+	my @bams = split(/,/, $bamstr);
+	my $whitebams = join(' ', @bams);
+	
+	if($ishts){
+		system("samtools mpileup -ugf $ref -r $chr $whitebams | bcftools call -vmO b -o $bcf");
+	}else{
+		system("samtools mpileup -uf $ref -r $chr $whitebams | bcftools view -bvcg - > $bcf"); 
+	}
+	
+	print "Finished creating bcf on chr: $chr\n";
 }
