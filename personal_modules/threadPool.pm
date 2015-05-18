@@ -17,27 +17,25 @@ has 'queue' => (traits => ['Array'], is => 'rw', isa => 'ArrayRef[Any]', default
 has 'maxthreads' => (is => 'ro', isa => 'Int', required => 1);
 
 sub submit{
-	my ($self, $thread) = @_;
+	my ($self, $thread, $d) = @_;
 	
 	$self->enqueue($thread);
 	if($self->num >= $self->maxthreads){
 		while(1){
 			my @joinable = threads->list(threads::joinable);
-			my @remove;
+			my @keep;
 			if(scalar(@joinable) > 0){
 				for(my $x = 0; $x < $self->num; $x++){
 					if($self->thr($x)->is_joinable()){
 						$self->thr($x)->join();
-						$remove[$x] = 1;
+						if(defined($d)){
+							print STDERR "THREADPOOL joining thread: " . $self->thr($x) . "\n";
+						}
 					}else{
-						$remove[$x] = 0;
+						push(@keep, $self->thr($x));
 					}
 				}
-				my @threads = @{$self->queue};
-				for(my $x = $self->num - 1; $x >= 0; $x--){
-					@threads = splice(@threads, $x, 1);
-				}
-				$self->queue(\@threads);
+				$self->queue(\@keep);
 				last;
 			}
 			sleep(3);
@@ -46,7 +44,11 @@ sub submit{
 }
 
 sub joinAll{
-	my ($self) = @_;
+	my ($self, $d) = @_;
+	if(defined($d)){
+		my $num = $self->num;
+		print STDERR "THREADPOOL waited for $num threads!\n";
+	}
 	foreach my $thr (@{$self->queue}){
 		$thr->join();
 	}

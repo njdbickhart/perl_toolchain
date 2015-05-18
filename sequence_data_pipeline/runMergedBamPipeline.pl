@@ -74,6 +74,7 @@ if(! -d $outputfolder){
 
 # Generate log file
 my $log = simpleLogger->new('logFileBaseStr' => 'MergedBamPipeline');
+
 $log->OpenLogger($outputfolder);
 $log->Info("Start", "Began pipeline run for spreadsheet: $spreadsheet in $outputfolder using $threads threads");
 
@@ -94,8 +95,8 @@ open(IN, "< $spreadsheet") || die "could not open fastq spreadsheet: $spreadshee
 my %counter;
 my %bams; # {sample} -> [] -> sortedbam
 my @parsers;
-my $alignthreads = ($runFQC)? $threads / 3 : $threads; # If we are running fastqc at the same time, then only run one alignment thread per fastqc thread, rounded down
-my $fqcThreads = ($threads / 3) * 2;
+my $alignthreads = ($runFQC)? int($threads / 3) : $threads; # If we are running fastqc at the same time, then only run one alignment thread per fastqc thread, rounded down
+my $fqcThreads = int(($threads / 3) * 2);
 
 # Ensure that we don't have fractional threads!
 if($alignthreads < 1){
@@ -115,6 +116,7 @@ if($runFQC){
 }
 
 #my $fqcPool = threadPool->new('maxthreads' => $fqcThreads);
+
 while(my $line = <IN>){
 	chomp $line;
 	# Split the line into an array based on tab delimiters
@@ -127,6 +129,7 @@ while(my $line = <IN>){
 		# file => fastq file, sample => sample_name, library => library_name, readNum => first_or_second_read, log => simpleLogger
 		#my $fqcparser1 = fastqcParser->new('file' => $segs[0], 'sample' => $segs[-1], 'library' => $segs[-2], 'readNum' => 1, 'log' => $log);
 		#my $fqcparser2 = fastqcParser->new('file' => $segs[1], 'sample' => $segs[-1], 'library' => $segs[-2], 'readNum' => 1, 'log' => $log);
+
 		
 		# Running fastqc takes the longest, so we're only going to fork this section
 		# my ($file, $sample, $lib, $num, $log, $outfile, $fastqcexe) = @_;
@@ -147,6 +150,7 @@ while(my $line = <IN>){
 close IN;
 waitall;
 #$fqcPool->joinAll();
+
 $log->Info("Spreadsheet", "All alignment threads completed");
 
 # if we ran fastqc, then start parsing the data
@@ -168,6 +172,7 @@ foreach my $sample (keys(%bams)){
 		#samMerge($bams{$sample}, "$outputfolder/$sample", $log, $sample);
 		#my $thr = threads->create('samMerge', $bams{$sample}, "$outputfolder/$sample", $log, $sample);
 		#$mergerPool->submit($thr);
+
 		push(@finalbams, $finalbam);
 	}else{
 		push(@finalbams, $bams{$sample}->[0]);
@@ -211,6 +216,7 @@ if($runSNPFork){
 		
 		$log->Info("[Main]", "Submit: runSamtoolsBCFCaller, args \=\> $ref, $bcf, $bamstr, $c, $ishts");
 		fork { sub => \&runSamtoolsBCFCaller, args => [$ref, $bcf, $bamstr, $c, $ishts], max_proc => $threads };
+
 	}
 	
 	waitall();
