@@ -4,7 +4,7 @@
 # The whole goal is to condense the information from fastqc across an entire sample into a spreadsheet-style row
 
 # Required in constructor:
-# file => fastq file, sample => sample_name, library => library_name, readNum => first_or_second_read, log => simpleLogger
+# file => fastq file, sample => sample_name, library => library_name, readNum => first_or_second_read, log => simpleLogger, out => outdir
 
 # Pipeline:
 # 	$object->runFastqc($fastqc_exe)
@@ -26,7 +26,7 @@ our @seHeaders = ("Sample", "Library", "FastqFile", "ReadNum", "TotalReads", "Fi
 	"First25N", "Second25N", "Third25N", "Fourth25N" );
 
 has ['pass', 'overrep', 'kmer'] => (is => 'rw', isa => 'Str', default => 'PASS');
-has ['file', 'sample', 'library'] => (is => 'ro', isa => 'Str', required => 1);
+has ['file', 'sample', 'library', 'out'] => (is => 'ro', isa => 'Str', required => 1);
 has 'log' => (is => 'ro', isa => 'simpleLogger', required => 1);
 has 'readNum' => (is => 'ro', isa => 'Num', required => 1);
 has 'seqlendist' => (is => 'rw', isa => 'Str');
@@ -51,8 +51,9 @@ sub runFastqc{
 	$self->log->Info("[FQCPARSE]", "Beginning fastqc runtime on file: " . $self->file);
 	
 	# Determine file output 
-	my ($filename, $dirs, $ext) = fileparse($self->file);
-	if($dirs eq ""){
+	my $filename = basename($self->file);
+	my $dirs = $self->out;
+	if($dirs eq "" || !(-d $dirs)){
 		$self->log->Fatal("[FQCPARSE]", "Could not find path folders for files!!!");
 	}
 	#if($ext eq 'gz'){
@@ -73,7 +74,7 @@ sub runFastqc{
 	#	$self->zip("$dirs/$filename" . "_fastqc.zip");
 	#}
 	
-	system("$fastqc -q " . $self->file);
+	system("$fastqc -o $dirs -q " . $self->file);
 	$self->log->Info("[FQCPARSE]", "Finished fastqc runtime on file: " . $self->file);
 }
 
@@ -82,7 +83,9 @@ sub parseStats{
 	
 	$self->log->Info("[FQCPARSE]", "Parsing fastqc stats on file: " . $self->file);
 
-	my ($filename, $dirs, $ext) = fileparse($self->file);	
+	#my ($filename, $dirs, $ext) = fileparse($self->file);	
+	my $filename = basename($self->file);
+	my $dirs = $self->out;
 	my @fsegs = split(/\./, $filename);
         if($fsegs[-1] eq 'gz'){
               pop(@fsegs);
@@ -202,11 +205,13 @@ sub cleanUp{
 	my ($self, $czip) = @_;
 	
 	if( -s $self->folder){
-		$self->log->INFO("cleanup", "Removing fastqc uncompressed folder");
+		$self->log->Info("cleanup", "Removing fastqc uncompressed folder");
+		system("rm -r " . $self->folder);
 	}
 	
 	if( -s $self->zip && $czip){
-		$self->log->INFO("cleanup", "Removing fastqc zip");
+		$self->log->Info("cleanup", "Removing fastqc zip");
+		system("rm " . $self->zip);
 	}
 }
 

@@ -116,6 +116,24 @@ if($runFQC){
 	close OUT;
 }
 
+# Counter variables for progress report
+my %total;
+my %current;
+my ($cur, $tot);
+while(my $line = <IN>){
+	$tot += 1;
+	chomp $line;
+	my @segs = split(/\t/, $line);
+	$total{$segs[-1]} += 1;
+	$current{$segs[-1]} = 0;
+}
+$cur = 0;
+close IN;
+
+# Reopening filehandle
+open(IN, "< $spreadsheet");
+seek(IN, 0, 0);
+
 #my $fqcPool = threadPool->new('maxthreads' => $fqcThreads);
 
 while(my $line = <IN>){
@@ -124,18 +142,30 @@ while(my $line = <IN>){
 	my @segs = split(/\t/, $line);
 	# This counter serves to differentiate the read group IDs on the different aligned bam files
 	$counter{$segs[-1]} += 1;
-	
+
+
+	# Generating log position message	
+	$cur++;
+	$current{$segs[-1]} += 1;
+	my $logmsg = sprintf("%0.2f\% through sample %s and %0.2f\% through total files", (($current{$segs[-1]} / $total{$segs[-1]}) * 100), $segs[-1], (($cur / $tot) * 100));
+
 	# If we're generating statistics on all of the fastqs, then fork fastqc
 	if($runFQC){
 		# file => fastq file, sample => sample_name, library => library_name, readNum => first_or_second_read, log => simpleLogger
 		#my $fqcparser1 = fastqcParser->new('file' => $segs[0], 'sample' => $segs[-1], 'library' => $segs[-2], 'readNum' => 1, 'log' => $log);
 		#my $fqcparser2 = fastqcParser->new('file' => $segs[1], 'sample' => $segs[-1], 'library' => $segs[-2], 'readNum' => 1, 'log' => $log);
-
+		if(!(-d "$outputfolder/fastqc/$segs[-1]")){
+			if(!(-d "$outputfolder/fastqc")){
+				mkdir("$outputfolder/fastqc");
+			}
+			mkdir("$outputfolder/fastqc/$segs[-1]");
+		}
+		my $fqcdir = "$outputfolder/fastqc/$segs[-1]";
 		
 		# Running fastqc takes the longest, so we're only going to fork this section
 		# my ($file, $sample, $lib, $num, $log, $outfile, $fastqcexe) = @_;
-		fork { sub => \&fastqcWrapper, args => [$segs[0], $segs[-1], $segs[-2], 1, $log, $fqcSpreadsheet, $fastqc], max_proc => $fqcThreads };
-		fork { sub => \&fastqcWrapper, args => [$segs[1], $segs[-1], $segs[-2], 2, $log, $fqcSpreadsheet, $fastqc], max_proc => $fqcThreads };
+		fork { sub => \&fastqcWrapper, args => [$segs[0], $segs[-1], $segs[-2], 1, $log, $fqcSpreadsheet, $fqcdir, $fastqc], max_proc => $threads };
+		fork { sub => \&fastqcWrapper, args => [$segs[1], $segs[-1], $segs[-2], 2, $log, $fqcSpreadsheet, $fqcdir, $fastqc], max_proc => $threads };
 		#fastqcWrapper($fqcparser1, $fastqc);
 		#fastqcWrapper($fqcparser2, $fastqc);
 		
@@ -143,7 +173,7 @@ while(my $line = <IN>){
 	
 	# The command that creates the new alignment process
 	fork { sub => \&runBWAAligner, 
-		args => [$segs[0], $segs[1], $refgenome, $reffai, $outputfolder, $segs[-1], $segs[-2], $counter{$segs[-1]}, $log, $javaexe, $picardfolder], 
+		args => [$segs[0], $segs[1], $refgenome, $reffai, $outputfolder, $segs[-1], $segs[-2], $counter{$segs[-1]}, $log, $javaexe, $picardfolder, $logmsg], 
 		max_proc => $threads };
 	#runBWAAligner($segs[0], $segs[1], $refgenome, $reffai, $outputfolder, $segs[-1], $segs[-2], $counter{$segs[-1]}, $log, $javaexe, $picardfolder);
 	push(@{$bams{$segs[-1]}}, "$outputfolder/$segs[-1]/$segs[-1].$counter{$segs[-1]}.nodup.bam");
@@ -163,11 +193,14 @@ if($runFQC){
 $log->Info("Merger", "Beginning bam merger.");
 my @finalbams;
 
+my $samexe = SamtoolsExecutable->new('log' => $log);
+my $ishts = $samexe->isHTSLib();
+
 foreach my $sample (keys(%bams)){
 	my $finalbam = "$outputfolder/$sample/$sample.merged.bam";
 	if(scalar(@{$bams{$sample}}) > 1){
 		fork { sub => \&samMerge,
-			args => [$bams{$sample}, "$outputfolder/$sample", $log, $sample],
+			args => [$bams{$sample}, "$outputfolder/$sample", $log, $sample, $ishts],
 			max_proc => $threads };
 	
 		#samMerge($bams{$sample}, "$outputfolder/$sample", $log, $sample);
@@ -206,8 +239,7 @@ if($runSNPFork){
 		close IN;
 	}
 	
-	my $samexe = SamtoolsExecutable->new('log' => $log);
-	my $ishts = $samexe->isHTSLib();
+	
 	my @bcfs;
 	my $bamstr = join(",", @finalbams);
 	foreach my $c (@coords){	
@@ -242,9 +274,9 @@ $log->Close();
 
 exit;
 sub fastqcWrapper{
-	my ($file, $sample, $lib, $num, $log, $outfile, $fastqcexe) = @_;
+	my ($file, $sample, $lib, $num, $log, $outfile, $fqcdir, $fastqcexe) = @_;
 	
-	my $fqcParser = fastqcParser->new('file' => $file, 'sample' => $sample, 'library' => $lib, 'readNum' => $num, 'log' => $log);
+	my $fqcParser = fastqcParser->new('file' => $file, 'sample' => $sample, 'library' => $lib, 'readNum' => $num, 'out' => $fqcdir, 'log' => $log);
 	$fqcParser->runFastqc($fastqcexe);
 	$fqcParser->parseStats();
 	$fqcParser->cleanUp();
@@ -253,24 +285,34 @@ sub fastqcWrapper{
 }
 
 sub samMerge{
-	my ($file_array, $outputdir, $log, $sample) = @_;
+	my ($file_array, $outputdir, $log, $sample, $ishts) = @_;
 	
 	my $output = "$outputdir/$sample.merged.bam";
-	my $header = headerCreation($file_array, "$outputdir/$sample.header.sam");
 	my $filestr = join(" ", @{$file_array});
-	$log->Info("sammerge", "samtools merge -h $header $output $filestr");
-	system("samtools merge -h $header $output $filestr");
-	$log->Info("sammerge", "samtools index $output");
-	system("samtools index $output");
+	
+	my $header;
+	if($ishts){	
+		$log->Info("sammerge", "HTSLIB: samtools merge -cp $output $filestr");
+		system("samtools merge -p $output $filestr");
+		$log->Info("sammerge", "samtools index $output");
+		system("samtools index $output");
+	}else{
+		$header = headerCreation($file_array, "$outputdir/$sample.header.sam");
+		$log->Info("sammerge", "samtools merge -h $header $output $filestr");
+		system("samtools merge -h $header $output $filestr");
+		$log->Info("sammerge", "samtools index $output");
+		system("samtools index $output");
+	}
 	
 	if(-s $output){
 		$log->Info("sammerge", "Cleaning up bam files...");
 		foreach my $f (@{$file_array}){
 			system("rm $f");
+			system("rm $f.bai");
 		}
 	}
 	
-	if(-s $output){
+	if(-s $output && !$ishts){
 		system("rm $header");
 	}
 }
@@ -320,7 +362,7 @@ sub headerCreation{
 # The workhorse subroutine
 sub runBWAAligner{
 	# Perl needs to read in the arguments to the subroutine
-	my ($fq1, $fq2, $ref, $reffai, $outdir, $base, $lib, $num, $log, $java, $picarddir) = @_;
+	my ($fq1, $fq2, $ref, $reffai, $outdir, $base, $lib, $num, $log, $java, $picarddir, $logmsg) = @_;
 	# Take care of the names of the input and output files
 	my $fqbase = basename($fq1);
 	my ($fqStr) = $fqbase =~ /(.+)\.(fastq|fq).*/;
@@ -362,6 +404,8 @@ sub runBWAAligner{
 		system("rm $bwabam.bai");
 		$log->Info("BWAALIGNER", "Completed noduplicate bam. Removing BAM file");
 	}
+
+	$log->Info("Pipeline", $logmsg);
 }
 
 sub concatBCFtoVCF{
@@ -383,7 +427,7 @@ sub runSamtoolsBCFCaller{
 	my $whitebams = join(' ', @bams);
 	
 	if($ishts){
-		system("samtools mpileup -ugf $ref -r $chr $whitebams | bcftools call -vmO b -o $bcf");
+		system("samtools mpileup -t DPR -ugf $ref -r $chr $whitebams | bcftools call -vmO b -o $bcf");
 	}else{
 		system("samtools mpileup -uf $ref -r $chr $whitebams | bcftools view -bvcg - > $bcf"); 
 	}
