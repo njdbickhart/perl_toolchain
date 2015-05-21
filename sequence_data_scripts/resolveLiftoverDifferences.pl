@@ -31,14 +31,14 @@ foreach my $read (sort { $a cmp $b } keys(%store)){
 	my @temp = sort{$a->[1] <=> $b->[1]} @{$store{$read}};
 	
 	my @rtags = split(/_/, $read);
-	push(@rows, @rtags);
+	push(@rows, ("$rtags[0]_$rtags[1]", $rtags[2] ));
 	
 	foreach my $aln (@temp){
 		my $cigar = Cigar->new();
 		$cigar->populateCigar($aln->[5]);
 		my $len = $cigar->getLenLargestClip();
 		push(@rows, $aln->[2]);
-		my $elen = ($aln->[1] & 0x100)? (length($aln->[9]) - $len) + $aln->[3] : $aln->[9] + $aln->[3];
+		my $elen = ($aln->[1] & 0x100)? ($cigar->sumMatch()) + $aln->[3] : abs(length($aln->[9]) - $len) + $aln->[3];
 		push(@rows, ($aln->[1], $aln->[5], $aln->[3], $elen));
 	}		
 	
@@ -173,6 +173,19 @@ sub getLenLargestClip{
 			}
 		}
 	}
+	return $largest;
+}
+
+sub sumMatch{
+	my ($self) = @_;
+	my $largest = 0;
+	for(my $x = 0; $x < $self->Vcount; $x++){
+                if($self->get_tag($x) eq 'M'){
+                        #if($self->get_value($x) > $largest){
+                                $largest += $self->get_value($x);
+                        #}
+                }
+        }
 	return $largest;
 }
 

@@ -4,6 +4,7 @@
 use strict;
 
 our %flags = (
+	0 => 'TotalReads',
 	1 => 'MultSegs',
 	2 => 'BothSegsAlignProperly',
 	4 => 'SegUnmapped',
@@ -16,7 +17,8 @@ our %flags = (
 	512 => 'FailedQCFilter',
 	1024 => 'Duplicate',
 	2048 => 'SuplementaryAlign' );
-	
+
+my @nums = (0, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048);	
 my $usage = "perl $0 <Bam1> <Bam2> ... <BamN>\n";
 chomp(@ARGV);
 
@@ -34,8 +36,8 @@ foreach my $b (@ARGV){
 	while(my $line = <IN>){
 		chomp $line;
 		my @segs = split(/\t/, $line);
-		foreach my $k (keys(%flags)){
-			if($k & $segs[1] == $k){
+		foreach my $k (@nums){
+			if(($segs[1] & $k) == $k){
 				$table{$k} += 1;
 			}
 		}
@@ -56,6 +58,7 @@ sub printMrkDownTable{
 			$vlen = length($v);
 		}
 	}
+	$vlen++;
 	
 	printf "\|%-*s\|%*s\|\n", $nlen, "Flag", $vlen, "Count";
 	my $sepstr = '-' x ($nlen - 1);
@@ -65,7 +68,7 @@ sub printMrkDownTable{
 	foreach my $k (sort {$a <=> $b} keys(%{$hash})){
 		my $ftranslate = $flags{$k};
 		my $count = $hash->{$k};
-		printf "\|%-*s\|%*d\n", $nlen, $ftranslate, $vlen, $count;
+		printf "\|%-*s\|%*d\|\n", $nlen, $ftranslate, $vlen, $count;
 	}
 	print "\n";
 }
