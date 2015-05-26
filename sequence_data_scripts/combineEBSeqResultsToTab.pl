@@ -41,6 +41,13 @@ while(my $line = <COND>){
 	my @condsegs = split(/\t/, $line);
 	my @outsegs = split(/\t/, $base);
 	
+	for(my $x = 1; $x < scalar(@condsegs); $x++){
+		$condsegs[$x] =~ s/NA/0/g;
+	}
+	for(my $x = 1; $x < scalar(@outsegs); $x++){
+		$outsegs[$x] =~ s/NA/0/g;
+	}
+	
 	my $worker = EBseqCont->new();
 	$worker->Format(\@condsegs, \@outsegs, \@condhead, \@outhead);
 	
