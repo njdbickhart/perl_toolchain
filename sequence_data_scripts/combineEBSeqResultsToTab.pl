@@ -148,6 +148,7 @@ sub GetHeader{
 	foreach my $fc($self->getarray){
 		push(@outputhead, $fc->getTitle);
 	}
+	return @outputhead;
 }
 
 __PACKAGE__->meta->make_immutable;
