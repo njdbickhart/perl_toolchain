@@ -23,13 +23,21 @@ open(BASE, "< $opts{f}") || die "Could not open base output file!\n";
 open(OUT, "> $opts{o}"); 
 
 my $temp = <COND>;
+chomp($temp);
+$temp =~ s/\"//g;
 my @condhead = split(/\t/, $temp);
 $temp = <BASE>;
+chomp($temp);
+$temp =~ s/\"//g;
 my @outhead = split(/\t/, $temp);
 
 my $printhead = 1;
 while(my $line = <COND>){
 	my $base = <BASE>;
+	chomp($line, $base);
+	$line =~ s/\"//g;
+	$base =~ s/\"//g;
+	
 	my @condsegs = split(/\t/, $line);
 	my @outsegs = split(/\t/, $base);
 	
