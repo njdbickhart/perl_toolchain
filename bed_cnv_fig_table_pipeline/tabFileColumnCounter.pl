@@ -1,6 +1,7 @@
 #!/usr/bin/perl
 # This script is designed to process a tab delimited file to generate some basic statistics on column field count
 # It only works on columns that have a limited range of possible entries (like enumerated types)
+# 6/12/2015: added a STDIN functionality
 
 use strict;
 use Getopt::Std;
@@ -8,7 +9,7 @@ use Getopt::Std;
 my $usage = "perl $0 [options] -f <input file> -c <column number>
 	This script is designed to process a tab delimited file to generate some basic statistics on column field count.
 REQUIRED:
-	-f	Input space/tab delimited files separated by commas. Beginning spaces are removed from each line. Trailing spaces are condensed
+	-f	Input space/tab delimited files separated by commas OR \"stdin\" for STDIN. Beginning spaces are removed from each line. Trailing spaces are condensed
 	-c	The column number (Zero based!) to count features
 	
 OPTIONAL:
@@ -89,6 +90,7 @@ exit;
 BEGIN{
 package ColumnCounter;
 use Mouse;
+use FileHandle;
 use namespace::autoclean;
 
 # Required attributes
@@ -106,7 +108,13 @@ has 'counter' => (traits => ['Hash'], is => 'rw', isa => 'HashRef[Any]', default
 	
 sub readFile{
 	my ($self, $file) = @_;
-	open(IN, "< $file") || die "[ColumnCounter] Could not open input file: $file\n";
+	my $fh; # Filehandle
+	if($file eq "stdin"){
+		$fh = *STDIN;
+	}else{
+		$fh = FileHandle->new();
+		$fh->open("< $file") || die "[ColumnCounter] Could not open input file: $file\n";
+	}
 	my $col = $self->colnum;
 	my %hash;
 	my $com;
@@ -114,7 +122,7 @@ sub readFile{
 		$com = $self->ignore;
 	}
 	
-	while(my $line = <IN>){
+	while(my $line = <$fh>){
 		chomp($line);
 		$line =~ s/^\s+//;
 		
@@ -127,7 +135,7 @@ sub readFile{
 		my @segs = split(/\t/, $line);
 		$hash{$segs[$col]} += 1;
 	}
-	close IN;
+	close $fh;
 	$self->counter(\%hash);
 		
 }
