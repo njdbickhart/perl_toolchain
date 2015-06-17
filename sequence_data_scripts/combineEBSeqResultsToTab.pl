@@ -163,6 +163,9 @@ has ['c1name', 'c2name'] => (is => 'ro', isa => 'Str', required => 1);
 
 sub getFC{
 	my ($self) = @_;
+	if($self->c1c == 0){
+		return 0;
+	}
 	return ($self->c2c / $self->c1c);
 }
 

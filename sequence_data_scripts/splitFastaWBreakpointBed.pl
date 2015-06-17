@@ -67,7 +67,7 @@ foreach  my $ctg (keys(%coords)){
 	}else{
 		my $prev = 1;
 		my $ctr = 0;
-		for(my $x = 0; $x <= scalar(@breaks); $x++){
+		for(my $x = 0; $x < scalar(@breaks); $x++){
 			my $end = $breaks[$x]->[0];
 			$ctr++;
 			open(my $IN, "samtools faidx $opts{f} $ctg\:$prev-$end |");
