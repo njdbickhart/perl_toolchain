@@ -5,9 +5,9 @@
 use strict;
 use Getopt::Std;
 
-my $usage = "perl $0 -a <agp file> -r <rh file> -c <chromosome> -p <contig> -l <lines to pull above and below>\n";
+my $usage = "perl $0 -a <agp file> -r <rh file> -c <chromosome> -p <contig> -l <lines to pull above and below> -s <skip instance count [default: none]>\n";
 my %opts;
-getopt('arcpl', \%opts);
+getopt('arcpls', \%opts);
 # OK, the goal is to condense the RH map down to contitutive parts
 
 unless(defined($opts{'a'}) && defined($opts{'r'})){
@@ -20,12 +20,14 @@ my @rhdata; # [lines]-> [name, rhstart, rhend, start, end]
 # Start with agp file first
 my $agpbuffer = $opts{'l'};
 my @linebuff;
+my $skipthresh = (defined($opts{'s'}))? $opts{'s'} : 0;
+my $skipcount = 0;
 my $agp;
 open($agp, "< $opts{a}") || die "Could not open $opts{a} agp file!\n";
 while(my $line = <$agp>){
 	chomp $line;
 	my @segs = split(/\t/, $line);
-	if($segs[5] eq $opts{'p'} && $segs[0] eq $opts{'c'}){
+	if($segs[5] eq $opts{'p'} && $segs[0] eq $opts{'c'} && $skipcount == $skipthresh){
 		# Found the first instance! Working with it
 		# starting with previous data
 		foreach my $r (@linebuff){
@@ -42,6 +44,8 @@ while(my $line = <$agp>){
 			push(@agpdata, [$segs[5], $segs[6], $segs[7], $segs[8], $segs[9]]);
 		}
 		last; # We're done
+	}elsif($segs[5] eq $opts{'p'} && $segs[0] eq $opts{'c'} && $skipcount != $skipthresh){
+		$skipcount++;
 	}
 	if(scalar(@linebuff) >= $agpbuffer){
 		shift(@linebuff);
@@ -50,9 +54,10 @@ while(my $line = <$agp>){
 }
 close $agp;
 @linebuff = (); # clearing the buffer
+$skipcount = 0;
 
 # Now for the RH file -- this will be tricky because of multiple listings
-my $rhbuff = $opts{'l'} * 15;
+my $rhbuff = $opts{'l'} * 60;
 #my @rhdata; # [lines]-> [name, rhstart, rhend, start, end]
 open(my $rh, "< $opts{r}") || die "Could not open $opts{r} rh file\n";
 while(my $line = <$rh>){
@@ -60,7 +65,7 @@ while(my $line = <$rh>){
 	my @segs = split(/\t/, $line);
 	my @qsegs = split(/\_/, $segs[5]);
 	$segs[5] = $qsegs[0];
-	if($segs[1] eq $opts{'c'} && $qsegs[0] eq $opts{'p'}){
+	if($segs[1] eq $opts{'c'} && $qsegs[0] eq $opts{'p'} && $skipcount == $skipthresh){
 		# Found the start! Now to progress back through the buffer to get the lines we need to pull
 		my @order;
 		foreach my $r (@linebuff){
@@ -123,10 +128,18 @@ while(my $line = <$rh>){
 			}
 		}
 		last;
+	}elsif($segs[1] eq $opts{'c'} && $qsegs[0] eq $opts{'p'} && $skipcount != $skipthresh){
+		# Accounts for single markers being missed -- also prevents long lines from saturating
+		# the skipcounter
+		if($linebuff[-1]->[5] eq $qsegs[0]){
+			
+		}else{
+			$skipcount++;
+		}
 	}
 			
 	
-	if(scalar(@linebuff) >= $agpbuffer){
+	if(scalar(@linebuff) >= $rhbuff){
 		shift(@linebuff);
 	}
 	push(@linebuff, \@segs);
