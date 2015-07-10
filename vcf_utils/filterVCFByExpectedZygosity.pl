@@ -13,9 +13,10 @@ my $usage = "perl $0 [options]
 	-o	output vcf file name
 	-u	UCSC region to focus on in output file (optional)
 	-f	fuzzy heterozygous search -- will count homozygote alts as well (optional)
+	-z	Threshold percentage (optional -- 100%)
 ";
 
-getopt('vpou', \%opts);
+getopt('vpouz', \%opts);
 
 if(!defined($opts{'v'}) || !defined($opts{'p'}) || !defined($opts{'o'})){
 	print $usage;
@@ -60,13 +61,19 @@ while(my $line = <$IN>){
 }
 
 # Now to plough through the variant calls
-my $threshold = scalar(@search);
+my $deg = (defined($opts{'z'}))? $opts{'z'} : 1;
+my $threshold = scalar(@search) * $deg;
 my $found = 0;
+my $lnum = 0;
 while(my $line = <$IN>){
 	chomp $line;
 	my @segs = split(/\t/, $line);
+	$lnum++;
+	if($lnum % 1000000 == 0){
+		print STDERR "On line: $lnum\r";
+	}
 	if($regionFilter){
-		if($segs[0] ne $chr && ($segs[1] < $start || $segs[1] > $end)){
+		if($segs[0] ne $chr || ($segs[1] < $start || $segs[1] > $end)){
 			next; # skip this if it's outside of our region of interest
 		}
 	}
