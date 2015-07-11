@@ -7,6 +7,7 @@ use Getopt::Std;
 
 my %opts;
 my $usage = "perl $0 -a <comparison file one> -b <comparison file two> -o <output alignment>
+	Optional: -d	Start the matrix at the lower diagonal rather than at the highest alignment score
 	The comparison files must be an ordered list of names, separated by newlines
 	The B file is reversed to provide a reverse alignment\n";
 	
@@ -20,6 +21,7 @@ unless(defined($opts{'a'}) && defined($opts{'b'}) && defined($opts{'o'})){
 # Read in files
 my @adata;
 my @bdata;
+my $diag = ($opts{'d'})? 1 : 0;
 
 open(my $IN, "< $opts{a}");
 while(my $line = <$IN>){
@@ -35,33 +37,33 @@ while(my $line = <$IN>){
 }
 close $IN;
 
-my @forwardmatrix = CreateSWMatrix(\@adata, \@bdata);
-
-my ($xpos, $ypos, $highscore) = FindMaxValue(\@forwardmatrix);
-
-my (@foraalign, @forbalign);
-Alignment(\@forwardmatrix, $xpos, $ypos, \@adata, \@bdata, \@foraalign, \@forbalign);
-
+my ($forwardmatrix, $ipos, $jpos, $highscore) = CreateSWMatrix(\@adata, \@bdata, $diag);
+#my ($xpos, $ypos, $highscore) = FindMaxValue(\@forwardmatrix);
+my ($foraalign, $forbalign) = Alignment($forwardmatrix, $ipos, $jpos, \@adata, \@bdata);
 open(my $OUT, "> $opts{o}");
-PrintAlignments(\@foraalign, \@forbalign, $OUT, 0);
+print "FileA (top): $opts{a}\n";
+print "FileB (bottom): $opts{b}\n";
+print $OUT "FileA (top): $opts{a}\n";
+print $OUT "FileB (bottom): $opts{b}\n";
+PrintAlignments($foraalign, $forbalign, $OUT, $highscore, 0);
 
-my @revb = reverse(\@bdata);
+my @revb = reverse(@bdata);
 
-my @reversematrix = CreateSWMatrix(\@adata, \@revb);
-($xpos, $ypos, $highscore) = FindMaxValue(\@reversematrix);
-my (@revaalign, @revbalign);
-Alignment(\@reversematrix, $xpos, $ypos, \@adata, \@revb, \@revaalign, \@revbalign);
-PrintAlignments(\@revaalign, \@revbalign, $OUT, 1);
+my ($reversematrix, $ipos, $jpos, $highscore) = CreateSWMatrix(\@adata, \@revb, $diag);
+#($xpos, $ypos, $highscore) = FindMaxValue(\@reversematrix);
+my ($revaalign, $revbalign) = Alignment($reversematrix, $ipos, $jpos, \@adata, \@revb);
+PrintAlignments($revaalign, $revbalign, $OUT, $highscore, 1);
 
 exit;
 sub PrintAlignments{
-	my ($aalign, $balign, $fh, $isrev) = @_;
+	my ($aalign, $balign, $fh, $highscore, $isrev) = @_;
+	
 	if($isrev){
-		print "Reverse alignment:\n";
-		print $fh "Reverse alignment:\n";
+		print "Reverse alignment: $highscore\n";
+		print $fh "Reverse alignment: $highscore\n";
 	}else{
-		print "Forward alignment:\n";
-		print $fh "Forward alignment:\n";
+		print "Forward alignment: $highscore\n";
+		print $fh "Forward alignment: $highscore\n";
 	}
 	
 	print join(',', @{$aalign}) . "\n";
@@ -72,71 +74,48 @@ sub PrintAlignments{
 }
 		
 sub Alignment{
-	my ($swmatrix, $xpos, $ypos, $aarray, $barray, $aalign, $balign) = @_;
+	my ($swmatrix, $ipos, $jpos, $aarray, $barray) = @_;
 		
-	my $cont = 1;
-	if($swmatrix->[$xpos - 1]->[$ypos - 1] == 0){
-		$cont = 0; # This alignment failed completely
-	}
-	
-	my $relhighscore= 0;
-	my $relxpos = 0;
-	my $relypos = 0;
-	
-	while($cont){
-		#Determine the next value for the matrix high score
-		for(my $x = $xpos; $x > 0; --$x) {
+	my (@align1, @align2);
+	while (1) { 
+		if($swmatrix->[$ipos]->[$jpos]->{pointer} eq "none"){
+			last;
+		}
+		
+		if ($swmatrix->[$ipos]->[$jpos]->{pointer} eq "diagonal") { 
+			push(@align1, $aarray->[$jpos -1]);
+			push(@align2, $barray->[$ipos - 1]); 
+			$ipos--; 
+			$jpos--; 
+		} elsif ($swmatrix->[$ipos]->[$jpos]->{pointer} eq "left") { 
+			my $len = length($aarray->[$jpos -1]);
+			push(@align1, $aarray->[$jpos - 1]);
 			
-			if($relhighscore < $swmatrix->[$x-1]->[$ypos-1]) {
-
-				$relhighscore = $swmatrix->[$x-1]->[$ypos-1];
-				$relxpos = $x - 1;
-				$relypos = $ypos - 1;
+			if($len -2 <= 0){
+				push(@align2, "-");
+			}else{
+				my $filler = "[" . ("-" x ($len - 2)) . "]";
+				push(@align2, $filler);
 			}
-		}
-
-		for(my $y = $ypos; $y > 0; --$y) {
-
-			if($relhighscore < $swmatrix->[$xpos-1][$y-1]) {
-
-				$relhighscore = $swmatrix->[$xpos-1][$y-1];
-				$relxpos = $xpos -1;
-				$relypos = $y - 1;
+ 
+			$jpos--; 
+		} elsif ($swmatrix->[$ipos]->[$jpos]->{pointer} eq "up") { 
+			my $len = length($barray->[$ipos - 1]);
+			if($len -1 <= 0){
+				push(@align1, "-");
+			}else{
+				my $filler = "[" . ("-" x ($len - 2)) . "]";
+				push(@align1, $filler);
 			}
-		}
-		
-		# perfect diagonal match
-		if($relxpos == $xpos - 1 && $relypos == $ypos -1){
-			unshift(@{$aalign}, $aarray->[$relxpos -1]);
-			unshift(@{$balign}, $barray->[$relypos -1]);
-		}else{
-			# Gap logic
-			if($relxpos == $xpos -1 && $relypos != $ypos - 1){
-				# Gap for seq A
-				# Add the bases up to the end of the gap for seqB
-				for(my $y = $ypos -1; $y > $relypos -1; --$y){
-					unshift(@{$balign}, $barray->[$relypos - 1]);
-				}
-				
-				# Add dashes to compensate for seqA
-				for(my $x = $ypos -1; $x > $relypos; --$x){
-					unshift(@{$aalign}, "-");
-				}
-			}elsif($relxpos != $xpos - 1 && $relypos == $ypos - 1){
-				# Gap for seq B
-				for(my $x = $xpos - 1; $x > $relxpos - 1; --$x){
-					unshift(@{$aalign}, $aarray->[$relxpos - 1]);
-				}
-				
-				for(my $y = $xpos -1; $y > $relxpos; --$y){
-					unshift(@{$balign}, "-");
-				}
-			}
-		
-		}	
-		$cont = Alignment($swmatrix, $relxpos, $relypos, $aarray, $barray, $aalign, $balign);
+			
+			push(@align2, $barray->[$ipos - 1]);
+			$ipos--; 
+		} 
 	}
-	return $cont;
+	@align1 = reverse(@align1);
+	@align2 = reverse(@align2);
+	
+	return \@align1, \@align2;
 }
 
 sub FindMaxValue{
@@ -159,45 +138,82 @@ sub FindMaxValue{
 }
 
 sub CreateSWMatrix{
-	my ($aarray, $barray) = @_;
+	my ($aarray, $barray, $diag) = @_;
 	# A is the vertical
 	# B is the horizontal
+	my $match = 1;
+	my $mismatch = 0;
+	my $gap = -1;
 	
 	# Initialize the matrix
 	my @swmatrix;
-	for(my $x = 0; $x < scalar(@{$aarray}); $x++){
-		my @tempb;
-		for(my $y = 0; $y < scalar(@{$barray}); $y++){
-			push(@tempb, 0);
-		}
-		push(@swmatrix, \@tempb);
+	$swmatrix[0]->[0]->{score} = 0; 
+	$swmatrix[0]->[0]->{pointer} = "none"; 
+	for(my $j = 1; $j <= scalar(@{$aarray}); $j++) { 
+		$swmatrix[0]->[$j]->{score} = 0; 
+		$swmatrix[0]->[$j]->{pointer} = "none"; 
+	} 
+	for (my $i = 1; $i <= scalar(@{$barray}); $i++) { 
+		$swmatrix[$i]->[0]->{score} = 0; 
+		$swmatrix[$i]->[0]->{pointer} = "none"; 
 	}
 	
 	# Score the matrix
-	for(my $x = 1; $x <= scalar(@{$aarray}); $x++){
-		for(my $y = 0; $y <= scalar(@{$barray}); $y++){
-			my $compval = 0;
-			
-			# Position matches
-			if($aarray->[$x -1] eq $barray->[$y -1]){
-				# Match score = 5
-				$compval = $swmatrix[$x-1]->[$y-1] + 5;
+	my ($ipos, $jpos, $highscore);
+	for(my $i = 1; $i <= scalar(@{$barray}); $i++) { 
+		for(my $j = 1; $j <= scalar(@{$aarray}); $j++) { 
+			my ($diagonal_score, $left_score, $up_score); 
+			# calculate match score 
+			my $contig1 = $aarray->[$j - 1]; 
+			my $contig2 = $barray->[$i - 1]; 
+			if ($contig1 eq $contig2) { 
+				$diagonal_score = $swmatrix[$i-1]->[$j-1]->{score} + $match; 
+			} else { 
+				$diagonal_score = $swmatrix[$i-1]->[$j-1]->{score} + $mismatch; 
+			} 
+			# calculate gap scores 
+			$up_score = $swmatrix[$i-1]->[$j]->{score} + $gap; 
+			$left_score = $swmatrix[$i]->[$j-1]->{score} + $gap; 
+			if ($diagonal_score <= 0 and $up_score <= 0 and $left_score <= 0) { 
+				$swmatrix[$i]->[$j]->{score} = 0; 
+				$swmatrix[$i]->[$j]->{pointer} = "none"; 
+				next; 
+				# terminate this iteration of the loop 
 			}
-			
-			$compval = GapPenaltyIncorporation($x, $y, $compval, \@swmatrix);
-			
-			# Mismatch
-			if($aarray->[$x -1] ne $barray->[$y -1]){
-				# Mismatch score = -4
-				$compval = $swmatrix[$x-1]->[$y-1] - 4;
+			# choose best score 
+			if ($diagonal_score >= $up_score) { 
+				if ($diagonal_score >= $left_score) { 
+					$swmatrix[$i]->[$j]->{score} = $diagonal_score; 
+					$swmatrix[$i]->[$j]->{pointer} = "diagonal"; 
+				} else { 
+					$swmatrix[$i]->[$j]->{score} = $left_score; 
+					$swmatrix[$i]->[$j]->{pointer} = "left"; 
+				} 
+			} else { 
+				if ($up_score >= $left_score) { 
+					$swmatrix[$i]->[$j]->{score} = $up_score; 
+					$swmatrix[$i]->[$j]->{pointer} = "up"; 
+				} else { 
+					$swmatrix[$i]->[$j]->{score} = $left_score; 
+					$swmatrix[$i]->[$j]->{pointer} = "left"; 
+				} 
+			} 
+			# set maximum score 
+			if ($swmatrix[$i]->[$j]->{score} > $highscore) { 
+				$ipos = $i; 
+				$jpos = $j; 
+				$highscore = $swmatrix[$i]->[$j]->{score}; 
 			}
-			
-			$compval = GapPenaltyIncorporation($x, $y, $compval, \@swmatrix);
-			
-			$swmatrix[$x]->[$y] = $compval;
 		}
 	}
-	return @swmatrix;
+	
+	# Useful option if a "more global" alignment is wanted
+	if($diag){
+		$ipos = scalar(@{$barray}) - 1;
+		$jpos = scalar(@{$aarray}) - 1;
+	}
+	
+	return \@swmatrix, $ipos, $jpos, $highscore;
 }
 
 sub GapPenaltyIncorporation{
