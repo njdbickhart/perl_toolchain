@@ -26,7 +26,13 @@ while(my $line = <$IN>){
 	my $ins = 0;
 	my $del = 0;
 	my $hasclipping = 0;
-	while($segs[5] =~ /(\d+)([MDISH])/){
+
+	if($segs[1] > 16){
+		$hasclipping = 1;
+		next;
+		# accounting for split alignments
+	}
+	while($segs[5] =~ /(\d+)([MDISH])/g){
 		if($2 eq 'D'){
 			$del += $1;
 		}elsif($2 eq 'I'){
@@ -36,8 +42,14 @@ while(my $line = <$IN>){
 		}
 	}
 	
-	my $pos = $segs[3] + length($segs[9]) - $ins + $del;
+	my $pos;
+	
 	my @namesegs = split(/\./, $segs[0]);
+	if(($namesegs[1] eq 'f' && $segs[1] == 0) || ($namesegs[1] eq 'r' && $segs[1] == 0)){
+		$pos = $segs[3] + length($segs[9]) - $ins + $del;
+	}else{
+		$pos = $segs[3];
+	}
 	if(!exists($snpcontainer{$namesegs[0]})){
 		$snpcontainer{$namesegs[0]} = VariantSite->new('chr' => $segs[2], 'pos' => $pos);
 	}else{
