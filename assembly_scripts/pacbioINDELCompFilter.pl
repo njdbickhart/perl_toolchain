@@ -67,7 +67,7 @@ has 'indlens' => (traits => ['Hash'], is => 'rw', isa => 'HashRef[Any]', default
 	
 has 'contig' => (is => 'rw', isa => 'Str', default => 'NA');
 has 'laspos' => (is => 'rw', isa => 'Int', default => 0);
-has ['totINDEL', 'simpINS', 'simpDEL', 'simpHomINS', 'simpHomDEL', 'compINS', 'compDEL'] => (traits => ['Counter'], is => 'rw', isa => 'Int', default => 0);
+has ['totINDEL', 'simpINS', 'simpDEL', 'simpHomINS', 'simpHomDEL', 'compINS', 'compDEL'] => (is => 'rw', isa => 'Counter', default => sub{Counter->new()});
 
 sub collect{
 	my ($self, $contig, $pos, $ref, $alt) = @_;
@@ -82,6 +82,7 @@ sub collect{
 	
 	my $temp = $self->get_contig($contig);
 	push(@{$temp}, $pos - $self->laspos);
+	$self->laspos($pos);
 	
 	$self->totINDEL->inc;
 	# Preemptive homopolymeric check
@@ -113,19 +114,20 @@ sub collect{
 			$self->compDEL->inc;
 		}
 	}
+	$self->set_contig($contig, $temp);
 }
 
 sub printOut{
 	my ($self) = @_;
 	my @totallens;	
 	
-	print "Simple_INS\t" + $self->simpINS + "\n";
-	print "Simple_DEL\t" + $self->simpDEL + "\n";
-	print "Simple_HOM_INS\t" + $self->simpHomINS + "\n";
-	print "Simple_HOM_DEL\t" + $self->simpHomDEL + "\n";
-	print "Complex_INS\t" + $self->compINS + "\n";
-	print "Complex_DEL\t" + $self-> compDEL + "\n";
-	print "Total_INDELS\t" + $self->totINDEL + "\n";
+	print "Simple_INS\t" . $self->simpINS->value . "\n";
+	print "Simple_DEL\t" . $self->simpDEL->value . "\n";
+	print "Simple_HOM_INS\t" . $self->simpHomINS->value . "\n";
+	print "Simple_HOM_DEL\t" . $self->simpHomDEL->value . "\n";
+	print "Complex_INS\t" . $self->compINS->value . "\n";
+	print "Complex_DEL\t" . $self->compDEL->value . "\n";
+	print "Total_INDELS\t" . $self->totINDEL->value . "\n";
 	
 	print "---\n";
 	print "Contig\tAvg_INDEL_Distance\n";
@@ -152,6 +154,19 @@ sub average{
 	}
 	
 	return ($sum / scalar(@{$array}));
+}
+
+__PACKAGE__->meta->make_immutable;
+
+package Counter;
+use Mouse;
+use namespace::autoclean;
+
+has 'value' => (is => 'rw', isa => 'Int', default => 0);
+
+sub inc{
+	my ($self) = @_;
+	$self->value($self->value + 1);
 }
 
 __PACKAGE__->meta->make_immutable;

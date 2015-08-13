@@ -18,7 +18,7 @@ if($opts{'h'} || (!defined($opts{'r'}) && !defined($opts{'i'}) && !defined($opts
 	exit;
 }
 
-unless(defined($opts{'n'}) && defined($opts{'r'}) && defined($opts{'o'}) && (defined($opts{'i'}) || defined($opts{'s'}))){
+unless(defined($opts{'n'}) && defined($opts{'r'}) && defined($opts{'o'}) && (defined($opts{'i'}))){
 	print "Missing mandatory arguments!\n";
 	print $usage;
 	exit;
