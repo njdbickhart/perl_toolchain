@@ -1,12 +1,14 @@
 #!/usr/bin/perl
 # this is a one-shot script designed to create split fasta entries from a bed file with breakpoint coordinates
+# 8/25/2015: 	update to account for breakpoints too close to the beginning and too close to the end of the chromosome
+#		also updated program to print out samtools faidx coordinates
 
 use strict;
 use Getopt::Std;
 
-my $usage = "perl $0 -f <indexed fasta file> -o <output fasta file> -b <bed file with breakpoints>\n";
+my $usage = "perl $0 -f <indexed fasta file> -o <output fasta file> -b <bed file with breakpoints> -s <samtools split coordinates>\n";
 my %opts;
-getopt('fob', \%opts);
+getopt('fobs', \%opts);
 
 unless(defined($opts{'f'})){
 	print $usage;
@@ -24,6 +26,7 @@ my %chrends; # {ctg} = endcoord
 open(my $IN, "< $opts{b}") || die "Could not open bed file!\n";
 while(my $line = <$IN>){
 	chomp $line;
+	$line =~ s/\r//g;
 	my @segs = split(/\t/, $line);
 	push(@{$coords{$segs[0]}}, [$segs[1], $segs[2]]);
 }
@@ -33,6 +36,7 @@ close $IN;
 open(my $IN, "< $opts{f}.fai") || die "Could not open fasta fai file!\n";
 while(my $line = <$IN>){
 	chomp $line;
+	$line =~ s/\r//g;
 	my @segs = split(/\t/, $line);
 	if(exists($coords{$segs[0]})){
 		$chrends{$segs[0]} = $segs[1];
@@ -41,54 +45,72 @@ while(my $line = <$IN>){
 close $IN;
 
 open(my $OUT, "> $opts{o}");
+open(my $SPLIT, "> $opts{s}");
 # Work on split contigs first
 foreach  my $ctg (keys(%coords)){
 	my @breaks = @{$coords{$ctg}};
 	
 	if(scalar(@breaks) == 1){
+		my $ctr = 1;
 		my $start = $breaks[0]->[0];
 		my $end = $breaks[0]->[1];
-		open(my $IN, "samtools faidx $opts{f} $ctg\:1-$start |");
-		my $h = <$IN>;
-		print $OUT ">$ctg.1\n";
-		while(my $line = <$IN>){
-			print $OUT $line;
+		
+		if($start >= 100){
+			open(my $IN, "samtools faidx $opts{f} $ctg\:1-$start |");
+			my $h = <$IN>;
+			print $OUT ">$ctg.$ctr\n";
+			print $SPLIT "$ctg.$ctr\t1\t$start\n";
+			while(my $line = <$IN>){
+				print $OUT $line;
+			}
+			close $IN;
+			$ctr++;
 		}
-		close $IN;
 		
 		my $chrend = $chrends{$ctg};
-		open(my $IN, "samtools faidx $opts{f} $ctg\:$end-$chrend |");
-		my $h = <$IN>;
-		print $OUT ">$ctg.2\n";
-		while(my $line = <$IN>){
-			print $OUT $line;
+		if($end <= $chrend - 100){			
+			open(my $IN, "samtools faidx $opts{f} $ctg\:$end-$chrend |");
+			my $h = <$IN>;
+			print $OUT ">$ctg.$ctr\n";
+			print $SPLIT "$ctg.$ctr\t$end\t$chrend\n";
+			while(my $line = <$IN>){
+				print $OUT $line;
+			}
+			close $IN;
 		}
-		close $IN;
 	}else{
 		my $prev = 1;
 		my $ctr = 0;
 		for(my $x = 0; $x < scalar(@breaks); $x++){
 			my $end = $breaks[$x]->[0];
-			$ctr++;
-			open(my $IN, "samtools faidx $opts{f} $ctg\:$prev-$end |");
-			my $h = <$IN>;
-			print $OUT ">$ctg.$ctr\n";
-			while(my $line = <$IN>){
-				print $OUT $line;
+			
+			if($end >= 100 && $end - $prev > 100){
+				$ctr++;
+				open(my $IN, "samtools faidx $opts{f} $ctg\:$prev-$end |");
+				my $h = <$IN>;
+				print $OUT ">$ctg.$ctr\n";
+				print $SPLIT "$ctg.$ctr\t$prev\t$end\n";
+				while(my $line = <$IN>){
+					print $OUT $line;
+				}
+				close $IN;
 			}
-			close $IN;
+			
 			$prev = $breaks[$x]->[1];
 		}
 		
 		my $chrend = $chrends{$ctg};
-		$ctr++;
-		open(my $IN, "samtools faidx $opts{f} $ctg\:$prev-$chrend |");
-		my $h = <$IN>;
-		print $OUT ">$ctg.$ctr\n";
-		while(my $line = <$IN>){
-			print $OUT $line;
+		if($prev <= $chrend - 100 && $chrend - $prev > 100){
+			$ctr++;
+			open(my $IN, "samtools faidx $opts{f} $ctg\:$prev-$chrend |");
+			my $h = <$IN>;
+			print $OUT ">$ctg.$ctr\n";
+			print $SPLIT "$ctg.$ctr\t$prev\t$chrend\n";
+			while(my $line = <$IN>){
+				print $OUT $line;
+			}
+			close $IN;
 		}
-		close $IN;
 	}
 }
 
@@ -112,5 +134,6 @@ while(my $line = <$IN>){
 }
 close $IN;
 close $OUT;
+close $SPLIT;
 
 exit;
