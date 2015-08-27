@@ -48,7 +48,7 @@ while(my $line = <$IN>){
 	if(($namesegs[1] eq 'f' && $segs[1] == 0) || ($namesegs[1] eq 'r' && $segs[1] == 0)){
 		$pos = $segs[3] + length($segs[9]) - $ins + $del;
 	}else{
-		$pos = $segs[3];
+		$pos = $segs[3] - 1;
 	}
 	if(!exists($snpcontainer{$namesegs[0]})){
 		$snpcontainer{$namesegs[0]} = VariantSite->new('chr' => $segs[2], 'pos' => $pos);
