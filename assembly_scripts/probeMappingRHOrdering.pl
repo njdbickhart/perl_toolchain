@@ -14,9 +14,12 @@ my $worker = RHMapCounter->new();
 
 # Read RH map data
 $worker->getRHProbeOrder($ARGV[0]);
+print STDERR "RH map order stored\n";
+
 
 # Read bam file
 $worker->readBAMinfo($ARGV[1]);
+print STDERR "Reading bamfile!\n";
 
 # Print output
 $worker->printOrderFile($ARGV[2]);
@@ -29,12 +32,24 @@ package RHMapCounter;
 use Mouse;
 use namespace::autoclean;
 
-has 'probeOrder' => (traits => ['Array'], is => 'rw', isa => 'ArrayRef[RHMapProbe]', default => sub{[]}, 
+has 'probeOrder' => (traits => ['Array'], is => 'rw', isa => 'ArrayRef[Str]', default => sub{[]}, 
 	handles => {
 		'addprobe' => 'push',
 		'getprobe' => 'get',
 		'allprobes' => 'elements',
 	});
+
+has 'probeChr' => (traits => ['Hash'], is => 'rw', isa => 'HashRef[Any]', default => sub{{}},
+	handles => {
+		'setprobechr' => 'set',
+		'getprobechr' => 'get',
+	});
+has 'probePacBio' => (traits => ['Hash'], is => 'rw', isa => 'HashRef[Any]', default => sub{{}},
+	handles => {
+		'setpacbio' => 'set',
+		'getpacbio' => 'get',
+		'existspacbio' => 'exists',
+	});		
 	
 has 'probeIndex' => (traits => ['Hash'], is => 'rw', isa => 'HashRef[Any]', default => sub{{}},
 	handles => {
@@ -49,30 +64,31 @@ sub printOrderFile{
 	my $chrcontig = "0"; my $curchr = "0";
 	open(my $OUT, "> $orderfile");
 	foreach my $probe ($self->allprobes){
-		if($probe->pacbiochr eq "NA"){next;}
+		if(!$self->existspacbio($probe)){next;}
 		
-		if($probe->pacbiochr ne $chrcontig && $chrcontig ne "0" && scalar(@current) > 1){
+		my $idx = $self->getprobeidx($probe);
+		if($self->getpacbio($probe)->[0]  ne $chrcontig && $chrcontig ne "0" && scalar(@current) > 1){
 			# new contig, and we have data to sort through
-			my $values = $self->determineOrder(\@current);
+			my $values = $self->determineOrient(\@current);
 			print {$OUT} "$curchr\t$chrcontig\t" . $values->[0] . "\t" . $values->[1] . "\t" . $values->[2] . "\n";
 			@current = ();
-		}elsif($probe->pacbiochr ne $chrcontig && scalar(@current) == 1){
+		}elsif($self->getpacbio($probe)->[0] ne $chrcontig && scalar(@current) == 1){
 			# new contig and there's only one entry for it!
-			print {$OUT} "$curchr\t$chrcontig\t" . $current[0]->pacbiopos . "\t" . $current[0]->pacbiopos . "\t?\n";
+			print {$OUT} "$curchr\t$chrcontig\t" . $current[0]->[1] . "\t" . $current[0]->[1] . "\t?\n";
 			@current = ();
 		}
 
-		push(@current, $probe);
-		$chrcontig = $probe->pacbiochr;
-		$curchr = $probe->chr();
+		push(@current, $self->getpacbio($probe));
+		$chrcontig = $self->getpacbio($probe)->[0];
+		$curchr = $self->getprobechr($probe);
 	}
 	
 	if(scalar(@current) > 1){
-		my $values = $self->determineOrder(\@current);
+		my $values = $self->determineOrient(\@current);
 		print {$OUT} "$curchr\t$chrcontig\t" . $values->[0] . "\t" . $values->[1] . "\t" . $values->[2] . "\n";
 		@current = ();
 	}elsif(scalar(@current) == 1){
-		print {$OUT} "$curchr\t$chrcontig\t" . $current[0]->pacbiopos . "\t" . $current[0]->pacbiopos . "\t?\n";
+		print {$OUT} "$curchr\t$chrcontig\t" . $current[0]->[1] . "\t" . $current[0]->[1] . "\t?\n";
 		@current = ();
 	}
 	close $OUT;
@@ -80,18 +96,18 @@ sub printOrderFile{
 
 sub determineOrient{
 	my ($self, $array) = @_;
-	my $min = 20000000;
+	my $min = 2000000000;
 	my $max = 0;
-	my $orient = ($array->[0]->pacbiopos - $array->[1]->pacbiopos < 0)? "+" : "-";
+	my $orient = ($array->[0]->[1] - $array->[1]->[1] < 0)? "+" : "-";
 	# I'm using empty string concatenation and redundant math to ensure that the Perl interpreter
 	# Doesn't just store the address of the array in memory
 	#my $ctgname = $array->[0]->[5] . "";
 	foreach my $v (@{$array}){
-		if($v->pacbiopos < $min){
-			$min = $v->pacbiopos + 1 - 1;
+		if($v->[1] < $min){
+			$min = $v->[1] + 1 - 1;
 		}
-		if($v->pacbiopos > $max){
-			$max = $v->pacbiopos + 1 - 1;
+		if($v->[1] > $max){
+			$max = $v->[1] + 1 - 1;
 		}
 	}
 	return [$min, $max, $orient];
@@ -100,16 +116,22 @@ sub determineOrient{
 sub readBAMinfo{
 	my ($self, $bamfile) = @_;
 	open(my $IN, "samtools view $bamfile |");
+	my %pacbio;
 	while(my $line = <$IN>){
 		chomp $line;
 		my @segs = split(/\t/, $line);
 		# check if this is a secondary alignment
 		if(($segs[1] & 2048) == 2048){next;}
 		
-		my $idx = $self->getprobeidx($segs[0]);
-		$self->getprobe($idx)->pacbiochr($segs[2]);
-		$self->getprobe($idx)->pacbiopos($segs[3]);
+		# Skip unmapped reads
+		if($segs[2] eq '*' || ($segs[1] & 4) == 4){next;}
+	
+		$pacbio{$segs[0]} = [$segs[2], $segs[3]];
+		#my $idx = $self->getprobeidx($segs[0]);
+		#$self->setpacbio($segs[0] => [$segs[2], $segs[3]]);
+		#$self->getprobe($idx)->pacbiopos($segs[3]);
 	}
+	$self->probePacBio(\%pacbio);
 	close $IN;
 }
 
@@ -118,14 +140,30 @@ sub getRHProbeOrder{
 	open(my $IN, "< $input") || die "Could not find input file!\n";
 	my $header = <$IN>;
 	
+	local $| = 1;	
 	my $idx = 0;
+	my @probes; my %probechrs; my %probeidx;
 	while(my $line = <$IN>){
 		chomp $line;
 		my @segs = split(/\t/, $line);
-		$self->addprobe(RHMapProbe->new('probename' => $segs[0], 'chr' => $segs[1]));
-		$self->setprobeidx($segs[0] => $idx);
+		
+		push(@probes, $segs[0]);
+		$probechrs{$segs[0]} = $segs[1];
+		$probeidx{$segs[0]} = $idx;
+		#$self->addprobe($segs[0]);
+		#$self->setprobechr($segs[0] => $segs[1]);
+		#$self->setprobeidx($segs[0] => $idx);
 		$idx++;
+		
+		if($idx % 5000 == 0){
+			print "At\t$idx\r";
+		}
 	}
+
+	$self->probeOrder(\@probes);
+	$self->probeChr(\%probechrs);
+	$self->probeIndex(\%probeidx);
+	print "\n";
 	close $IN;
 }
 
