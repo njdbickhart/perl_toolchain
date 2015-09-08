@@ -4,6 +4,8 @@
 # bam, and an annotated VCF of SNPs and INDELs.
 # Spreadsheet columns:
 # 	fq1\tfq2\tlibraryname\tanimalname
+# 9/8/2015 -- Version 0.0.2: 	Added  javaArg required config key to tune JVM runtime parameters
+#				Also Added STDERR logger
 
 use strict;
 use Getopt::Long;
@@ -13,16 +15,19 @@ use Forks::Super;
 use simpleConfigParser;
 use simpleLogger;
 use fastqcParser;
+use IPC::Open3;
+use IO::File;
 #use threads;
 #use threads::shared;
 #use threadPool;
 
 my ($configfile, $javaexe, $picardfolder, $outputfolder, $snpeffjar, $spreadsheet, $refgenome, $threads, $fastacoords, $fastqc);
 my ($runSNPFork, $runSNPEff, $runFQC);
-my @requiredConfig = ("java", "picard", "snpeff", "fastqc", "runSNP", "runEFF", "runFQC");
+my @requiredConfig = ("java", "picard", "snpeff", "fastqc", "runSNP", "runEFF", "runFQC", "javaArg");
 my $scriptdir = dirname(__FILE__);
 
 my $usage = "perl $0 --fastqs <spreadsheet to be processed> --output <base output folder> --reference <reference genome fasta>
+Version 0.0.2
 Arguments:
 	--fastqs	A tab-delimited spreadsheet with fastq file locations and read group info
 	--output	The base output folder for all bams and vcfs
@@ -59,6 +64,7 @@ $cfg->checkReqKeys(\@requiredConfig);
 $picardfolder = $cfg->getKey("picard");
 $fastqc = $cfg->getKey("fastqc");
 $javaexe = $cfg->getKey("java");
+$javaarg = $cfg->getKey("javaArg");
 $snpeffjar = $cfg->getKey("snpeff");
 $runFQC = $cfg->getKey("runFQC");
 $runSNPEff = $cfg->getKey("runEFF");
@@ -72,15 +78,18 @@ if(! -d $outputfolder){
 	mkdir($outputfolder) || die "Could not create base output folder: $outputfolder!\n";
 }
 
-# Generate log file
+# Generate log file and error file
 my $log = simpleLogger->new('logFileBaseStr' => 'MergedBamPipeline');
+my $errorlog = simpleLogger->new('logFileBaseStr' => 'MergedBamPipeline.err');
 
 $log->OpenLogger($outputfolder);
 $log->Info("Start", "Began pipeline run for spreadsheet: $spreadsheet in $outputfolder using $threads threads");
 
 $log->Info("Start", "Using config file: $configfile");
-$log->Info("Start", "Exes: picard-$picardfolder fastqc-$fastqc java-$javaexe snpeff-$snpeffjar");
+$log->Info("Start", "Exes: picard-$picardfolder fastqc-$fastqc java-$javaexe javaArg-$javaarg snpeff-$snpeffjar");
 $log->Info("Start", "Run Settings: runFQC-$runFQC runSNPEFF-$runSNPEff runSNPFork-$runSNPFork");
+
+$errorlog->OpenLogger($outputfolder);
 
 # Check the reference genome and see if it has been indexed yet by samtools. If not, do that indexing
 my $reffai = "$refgenome.fai";
@@ -173,7 +182,7 @@ while(my $line = <IN>){
 	
 	# The command that creates the new alignment process
 	fork { sub => \&runBWAAligner, 
-		args => [$segs[0], $segs[1], $refgenome, $reffai, $outputfolder, $segs[-1], $segs[-2], $counter{$segs[-1]}, $log, $javaexe, $picardfolder, $logmsg], 
+		args => [$segs[0], $segs[1], $refgenome, $reffai, $outputfolder, $segs[-1], $segs[-2], $counter{$segs[-1]}, $log, $errorlog, $javaexe, $javaarg, $picardfolder, $logmsg], 
 		max_proc => $threads };
 	#runBWAAligner($segs[0], $segs[1], $refgenome, $reffai, $outputfolder, $segs[-1], $segs[-2], $counter{$segs[-1]}, $log, $javaexe, $picardfolder);
 	push(@{$bams{$segs[-1]}}, "$outputfolder/$segs[-1]/$segs[-1].$counter{$segs[-1]}.nodup.bam");
@@ -362,7 +371,7 @@ sub headerCreation{
 # The workhorse subroutine
 sub runBWAAligner{
 	# Perl needs to read in the arguments to the subroutine
-	my ($fq1, $fq2, $ref, $reffai, $outdir, $base, $lib, $num, $log, $java, $picarddir, $logmsg) = @_;
+	my ($fq1, $fq2, $ref, $reffai, $outdir, $base, $lib, $num, $log, $errorlog, $java, $javaarg, $picarddir, $logmsg) = @_;
 	# Take care of the names of the input and output files
 	my $fqbase = basename($fq1);
 	my ($fqStr) = $fqbase =~ /(.+)\.(fastq|fq).*/;
@@ -370,13 +379,18 @@ sub runBWAAligner{
 	my $bwabam = "$outdir/$base/$base.$num.bam";
 	my $bwadedupbam = "$outdir/$base/$base.$num.nodup.bam";
 	#my $bwasort = "$outdir/$base/$base.$num.sorted";
+	local *TMPOUT = IO::File->new_tmpfile;
+	local *TMPERR = IO::File->new_tmpfile;
 	
 	# Create a sub directory if needed
 	mkdir("$outdir/$base") || print "";
 	
 	# Run the BWA mem command and create a bam file from the sam file
 	$log->Info("BWAALIGNER", "bwa mem -R '\@RG\\tID:$base.$num\\tLB:$lib\\tPL:ILLUMINA\\tSM:$base\' -v 1 -M $ref $fq1 $fq2 > $bwasam");
-	system("bwa mem -R '\@RG\\tID:$base.$num\\tLB:$lib\\tPL:ILLUMINA\\tSM:$base\' -v 1 -M $ref $fq1 $fq2 > $bwasam");
+	#system("bwa mem -R '\@RG\\tID:$base.$num\\tLB:$lib\\tPL:ILLUMINA\\tSM:$base\' -v 1 -M $ref $fq1 $fq2 > $bwasam");
+	my $pid = open3($in, "> $bwasam", ">&TMPERR", "bwa mem -R '\@RG\\tID:$base.$num\\tLB:$lib\\tPL:ILLUMINA\\tSM:$base\' -v 1 -M $ref $fq1 $fq2");
+	waitpid($pid, 0);    
+    	
 	my $samreader = SamFileReader->new('log' => $log);
 	$samreader->prepSam($bwasam);
 	#system("samtools view -b -o $bwabam -S $bwasam");
@@ -385,11 +399,15 @@ sub runBWAAligner{
 	#print "samtools sort $bwabam $bwasort\n";
 	#system("samtools sort $bwabam $bwasort");
 	#system("samtools index $bwasort.bam");
-	$log->Info("BWAALIGNER", "$java -jar $picarddir/MarkDuplicates.jar INPUT=$bwabam OUTPUT=$bwadedupbam METRICS_FILE=$bwadedupbam.metrics VALIDATION_STRINGENCY=LENIENT");
-	system("$java -jar $picarddir/MarkDuplicates.jar INPUT=$bwabam OUTPUT=$bwadedupbam METRICS_FILE=$bwadedupbam.metrics VALIDATION_STRINGENCY=LENIENT");
+	$log->Info("BWAALIGNER", "$java $javaarg -jar $picarddir/MarkDuplicates.jar INPUT=$bwabam OUTPUT=$bwadedupbam METRICS_FILE=$bwadedupbam.metrics VALIDATION_STRINGENCY=LENIENT");
+	#system("$java $javaarg -jar $picarddir/MarkDuplicates.jar INPUT=$bwabam OUTPUT=$bwadedupbam METRICS_FILE=$bwadedupbam.metrics VALIDATION_STRINGENCY=LENIENT");
+	my $pid = open3($in, ">&TMPOUT", ">&TMPERR", "$java $javaarg -jar $picarddir/MarkDuplicates.jar INPUT=$bwabam OUTPUT=$bwadedupbam METRICS_FILE=$bwadedupbam.metrics VALIDATION_STRINGENCY=SILENT");
+	waitpid($pid, 0);	
 	
 	$log->Info("BWAALIGNER", "samtools index $bwadedupbam");
-	system("samtools index $bwadedupbam");
+	#system("samtools index $bwadedupbam");
+	my $pid = open3($in, ">&TMPOUT", ">&TMPERR", "samtools index $bwadedupbam");
+	waitpid($pid, 0);
 	
 	# If the bam file exists and is not empty, then remove the sam file
 	if( -s $bwabam){
@@ -404,7 +422,15 @@ sub runBWAAligner{
 		system("rm $bwabam.bai");
 		$log->Info("BWAALIGNER", "Completed noduplicate bam. Removing BAM file");
 	}
-
+	seek $_, 0, 0 for \*TMPOUT, \*TMPERR;
+	while(<TMPOUT>){
+		$errorlog->INFO("BWAALIGNER", $_);
+	}
+	
+	while(<TMPERR>){
+		$errorlog->Warn("BWAALIGNER", $_);
+	}
+	
 	$log->Info("Pipeline", $logmsg);
 }
 
