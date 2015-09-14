@@ -1,5 +1,6 @@
 #!/usr/bin/perl
 # This script subsections fastq entries, aligns them to a reference genome and attempts to identify consensus assembly regions
+# Update - 9/14/2015:	Modified program to print out statistics on assembled segments at the end prior to printout.
 
 use strict;
 use Getopt::Std;
@@ -64,10 +65,14 @@ sub loadFastq{
 	open(my $OUT, "> temp.fq");
 	
 	my $max = length($seq);
-	for(my $x = 0; $x < $max + 1000; $x += 1000){
-		my $tempend = $x + 1000;
-		my $subseq = substr($seq, $x, 1000);
-		my $subqual = substr($seq, $x, 1000);
+	for(my $x = 0; $x < $max; $x += 1000){
+		my $e = 1000;
+		if($x + 1000 > length($seq)){
+			$e = length($seq) - $x - 1;
+		}
+		my $tempend = $x + $e;
+		my $subseq = substr($seq, $x, $e);
+		my $subqual = substr($seq, $x, $e);
 		my $tempname = "$origname.$x.$tempend";
 		
 		print {$OUT} "\@$tempname\n$subseq\n+\n$subqual\n";
@@ -130,7 +135,38 @@ sub produceOutput{
 	}
 	push(@outlines, [$self->origname, $prevustart, $prevuend, $prevchr, $prevcstart, $prevcend, join(";", @qualities)]);
 	
+	$self->printLongestChrAligns(\@outlines);
+	
 	return @outlines;
+}
+
+sub printLongestChrAligns{
+	my ($self, $outlines) = @_;
+	
+	my %chrmins; my %chrmaxs; my %chrlens;
+	foreach my $line (@{$outlines}){
+		my $min = ($line->[4] < $line->[5])? $line->[4] : $line->[5];
+		my $max = ($line->[4] > $line->[5])? $line->[4] : $line->[5];
+		
+		if(!exists($chrmins{$line->[3]})){
+			$chrmins{$line->[3]} = $min;
+			$chrmaxs{$line->[3]} = $max;
+			$chrlens{$line->[3]} = $max - $min;
+		}else{
+			if($chrmins{$line->[3]} > $min){
+				$chrmins{$line->[3]} = $min;
+			}
+			if($chrmaxs{$line->[3]} < $max){
+				$chrmaxs{$line->[3]} = $max;
+			}
+			$chrlens{$line->[3]} = $chrmaxs{$line->[3]} - $chrmins{$line->[3]};
+		}
+	}	
+	
+	print "Longest aligments:\tchr\tstart\tend\tlength\n";
+	foreach my $chrs (sort {$chrlens{$b} <=> $chrlens{$a}} keys(%chrlens)){
+		print "\t\t\t$chrs\t" . $chrmins{$chrs} . "\t" . $chrmaxs{$chrs} . "\t" . $chrlens{$chrs} . "\n";
+	}
 }
 
 __PACKAGE__->meta->make_immutable;
