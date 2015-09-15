@@ -1,11 +1,12 @@
 #!/usr/bin/perl
 # This script subsections fastq entries, aligns them to a reference genome and attempts to identify consensus assembly regions
 # Update - 9/14/2015:	Modified program to print out statistics on assembled segments at the end prior to printout.
+# Update - 9/15/2015:	Added fasta support
 
 use strict;
 use Getopt::Std;
 
-my $usage = "perl $0 -f <unitig fastq> -r <bwa indexed ref genome> -o <output tab file>\n";
+my $usage = "perl $0 -f <unitig fastq/fasta> -r <bwa indexed ref genome> -o <output tab file>\n";
 my %opts;
 getopt('fro', \%opts);
 
@@ -17,20 +18,52 @@ unless(defined($opts{'f'}) && defined($opts{'r'}) && defined($opts{'o'})){
 my $worker = unitigFastq->new();
 
 open(my $IN, "< $opts{f}") || die "Could not open input: $opts{f}!\n";
-while(my $name = <$IN>){
-	my $seq = <$IN>;
-	my $plus = <$IN>;
-	my $qual = <$IN>;
-	
-	chomp($name, $seq, $qual);
-	$name =~ s/\r//g;
-	$seq =~ s/\r//g;
-	$qual =~ s/\r//g;
-	$worker->loadFastq($name, $seq, $qual);
+# Determine file format
+my $line = <$IN>;
+seek($IN, 0, 0);
+
+if($line =~ /^>/){
+	# Fasta format
+	my ($name, $seq);
+	while(my $line = <$IN>){
+		chomp $line;
+		$line =~ s/\r//g;
+		if($line =~ /^>/ && length($seq) > 1){
+			$worker->loadFasta($name, $seq);
+			$seq = '';
+			$name = $line;
+		}elsif($line =~ /^>/ && length($seq) < 1){
+			$name = $line;
+		}else{
+			$seq .= $line;
+		}
+	}
+	# Catch end of file fasta data
+	if(length($name) > 1 && length($seq) > 1){
+		$worker->loadFasta($name, $seq);
+	}
+	print STDERR "loaded fasta file!\n";
+}elsif($line =~ /^@/){
+	# Fastq format
+
+	while(my $name = <$IN>){
+		my $seq = <$IN>;
+		my $plus = <$IN>;
+		my $qual = <$IN>;
+
+		chomp($name, $seq, $qual);
+		$name =~ s/\r//g;
+		$seq =~ s/\r//g;
+		$qual =~ s/\r//g;
+		$worker->loadFastq($name, $seq, $qual);
+	}
+	print STDERR "loaded fastq file!\n";
+}else{
+	# Indeterminate format!
+	print STDERR "Error! Could not determine format of input text file!\n";
+	exit;
 }
 close $IN;
-
-print STDERR "loaded fastq file!\n";
 
 $worker->alignAndProcess($opts{'r'});
 
@@ -72,7 +105,7 @@ sub loadFastq{
 		}
 		my $tempend = $x + $e;
 		my $subseq = substr($seq, $x, $e);
-		my $subqual = substr($seq, $x, $e);
+		my $subqual = substr($qual, $x, $e);
 		my $tempname = "$origname.$x.$tempend";
 		
 		print {$OUT} "\@$tempname\n$subseq\n+\n$subqual\n";
@@ -80,6 +113,34 @@ sub loadFastq{
 	close $OUT;
 	
 }
+
+sub loadFasta{
+	my ($self, $name, $seq) = @_;
+	
+	my ($origname) = $name =~ m/\>(.+)$/;
+	$self->origname($origname);
+	$self->sequence($seq);
+	$self->quality('I' x length($seq));
+	
+	$self->tempfq("temp.fq");
+	open(my $OUT, "> temp.fq");
+		
+	my $max = length($seq);
+	for(my $x = 0; $x < $max; $x += 1000){
+		my $e = 1000;
+		if($x + 1000 > length($seq)){
+			$e = length($seq) - $x - 1;
+		}
+		my $tempend = $x + $e;
+		my $subseq = substr($seq, $x, $e);
+		my $subqual = 'I' x $e;
+		my $tempname = "$origname.$x.$tempend";
+
+		print {$OUT} "\@$tempname\n$subseq\n+\n$subqual\n";
+	}
+	close $OUT;
+}
+	
 
 sub alignAndProcess{
 	my ($self, $reference) = @_;
