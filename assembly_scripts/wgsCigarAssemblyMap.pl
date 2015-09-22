@@ -1,12 +1,15 @@
 #!/usr/bin/perl
 # This script aligns WGS reads from a fastq onto assembled contig fastas 
 # The goal is to assess and concatenate CIGAR scores so that a bedgraph can be made
+# Version 0.0.2:	Bed output includes length of concatenated region and total number of reads
 
 use strict;
 use Getopt::Std;
 
+my $version = "0.0.2";
 my %opts;
-my $usage = "perl $0 -r <contig reference fasta> -f <wgs read fastq> -o <output bam file> -b <output bed file>\n";
+my $usage = "wgsCigarAssemblyMap.pl verison: $version
+perl $0 -r <contig reference fasta> -f <wgs read fastq> -o <output bam file> -b <output bed file>\n";
 
 getopt('rfob', \%opts);
 
@@ -18,8 +21,13 @@ unless(defined($opts{'r'}) && defined($opts{'f'}) && defined($opts{'o'}) && defi
 # Create the worker class
 my $worker = CigarCondenser->new('reffasta' => $opts{'r'}, 'infastq' => $opts{'f'}, 'outbam' => $opts{'o'});
 
-# perform alignments - generate output bam file
-$worker->runAlignment();
+# perform alignments - generate output bam file if it doesn't exist
+# This allows me to redo the calculation if the alignment went off successfully
+if( -s $opts{'o'}){
+	print STDERR "Already found $opts{o} bam file! Skipping alignment step!\n";
+}else{
+	$worker->runAlignment();
+}
 
 # process the alignments into data strings for each base of the contig
 $worker->processAlignments();
@@ -28,6 +36,8 @@ $worker->processAlignments();
 my $data = $worker->concatenateOutput();
 open(my $OUT, "> $opts{b}");
 foreach my $row (@{$data}){
+	# Adding length column to the end of the bed row
+	push(@{$row}, $row->[2] - $row->[1]);
 	print {$OUT} join("\t", @{$row}) . "\n";
 }
 close $OUT;
@@ -121,7 +131,7 @@ sub concatenateOutput{
 	my $data = $self->datastore();
 	my $contiglens = $self->contiglens;
 	
-	# output = []->[contig, start, end, cigarstring]
+	# output = []->[contig, start, end, cigarstring, totnumreads]
 	my @output;
 	
 	foreach my $contig (sort{$a cmp $b} keys(%{$data})){
@@ -130,10 +140,10 @@ sub concatenateOutput{
 			# we need to start the output array
 			if(scalar(@output) < 1){
 				if(!exists($data->{$contig}->{1})){
-					push(@output, [$contig, 1, 1, "NONE"]);
+					push(@output, [$contig, 1, 1, "NONE", 0]);
 				}else{
-					my $cratio = $self->calculateCigarRatio($data->{$contig}->{1});
-					push(@output, [$contig, 1, 1, $cratio]);
+					my ($cratio, $totreads) = $self->calculateCigarRatio($data->{$contig}->{1});
+					push(@output, [$contig, 1, 1, $cratio, $totreads]);
 				}
 			}
 		
@@ -144,15 +154,16 @@ sub concatenateOutput{
 					if($output[-1]->[0] eq $contig && $output[-1]->[3] eq "NONE"){
 						$output[-1]->[2] = $pos;
 					}else{
-						push(@output, [$contig, $pos, $pos, "NONE"]);
+						push(@output, [$contig, $pos, $pos, "NONE", 0]);
 					}
 				}else{
 					# mapped region, process as normal
-					my $cratio = $self->calculateCigarRatio($data->{$contig}->{$pos});
+					my ($cratio, $totreads) = $self->calculateCigarRatio($data->{$contig}->{$pos});
 					if($output[-1]->[0] eq $contig && $output[-1]->[3] eq $cratio){
 						$output[-1]->[2] = $pos;
+						$output[-1]->[3] += $totreads;
 					}else{
-						push(@output, [$contig, $pos, $pos, $cratio]);
+						push(@output, [$contig, $pos, $pos, $cratio, $totreads]);
 					}
 				}
 			}
@@ -181,7 +192,7 @@ sub calculateCigarRatio{
 		$cstr .= sprintf("%d%s", $ratio, $ckey);
 	}
 	
-	return $cstr;
+	return ($cstr, $totreads);
 }
 		
 
