@@ -75,10 +75,13 @@ sub runAlignment{
 	$self->contiglens(\%contiglens);
 	
 	# output only mapping alignments
-	system("bwa aln $ref $fastq | samtools view -bS -F 4 - | samtools sort -o $bam -T $bam.pre - ");
+	my $sam = "temp" . int(rand(10000000)) . ".sam";
+	system("bwa mem $ref $fastq | samtools view -bS -F 4 - | samtools sort -o $bam -T $bam.pre - ");
+	#system("bwa aln $ref $fastq > $sam");
+	#system("samtools view -bS -F 4 $sam | samtools sort -o $bam -T $bam.pre - ");
 	
 	print STDERR "Alignments finished. Bam file is: $bam\n";
-	system("bwa index $bam");
+	system("samtools index $bam");
 }
 
 sub processAlignments{

@@ -21,7 +21,7 @@ use IO::File;
 #use threads::shared;
 #use threadPool;
 
-my ($configfile, $javaexe, $picardfolder, $outputfolder, $snpeffjar, $spreadsheet, $refgenome, $threads, $fastacoords, $fastqc);
+my ($configfile, $javaexe, $javaarg, $picardfolder, $outputfolder, $snpeffjar, $spreadsheet, $refgenome, $threads, $fastacoords, $fastqc);
 my ($runSNPFork, $runSNPEff, $runFQC);
 my @requiredConfig = ("java", "picard", "snpeff", "fastqc", "runSNP", "runEFF", "runFQC", "javaArg");
 my $scriptdir = dirname(__FILE__);
@@ -381,6 +381,7 @@ sub runBWAAligner{
 	#my $bwasort = "$outdir/$base/$base.$num.sorted";
 	local *TMPOUT = IO::File->new_tmpfile;
 	local *TMPERR = IO::File->new_tmpfile;
+	my $in = '';
 	
 	# Create a sub directory if needed
 	mkdir("$outdir/$base") || print "";
