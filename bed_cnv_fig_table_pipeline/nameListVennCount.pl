@@ -27,6 +27,7 @@ for(my $x = 0; $x < scalar(@ARGV); $x++){
 	open(IN, "< $ARGV[$x]") || die "Could not open file $fnum : $ARGV[$x]!\n";
 	while(my $line = <IN>){
 		chomp $line;
+		$line =~ s/\r//g;
 		push(@{$store{$line}}, $fnum);
 	}
 	close IN;
