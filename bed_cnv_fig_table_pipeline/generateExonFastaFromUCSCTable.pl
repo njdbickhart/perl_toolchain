@@ -67,17 +67,19 @@ sub grepSamtoolsFasta{
 	
 	my $exoncount = ($orient eq '-')? scalar(@starts) : 1;
 	for(my $x = 0; $x < scalar(@starts); $x++){
-		my $ucsc = "$chr:$starts[$x]-$ends[$x]";
-		open(my $SAM, "samtools faidx $ref $ucsc | ");
-		while(my $line = <$SAM>){
-			if($line =~ /^>/){
-				# Steal the fasta carrot and replace it
-				print $OUT ">$name\_$exoncount\n";
-			}else{
-				print $OUT $line;
+		if($ends[$x] - $starts[$x] > 50){
+			my $ucsc = "$chr:$starts[$x]-$ends[$x]";
+			open(my $SAM, "samtools faidx $ref $ucsc | ");
+			while(my $line = <$SAM>){
+				if($line =~ /^>/){
+					# Steal the fasta carrot and replace it
+					print $OUT ">$name\_$exoncount\n";
+				}else{
+					print $OUT $line;
+				}
 			}
+			close $SAM;
 		}
-		close $SAM;
 		$exoncount += ($orient eq '-')? -1 : 1;
 	}
 			
