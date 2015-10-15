@@ -46,7 +46,7 @@ while(my $line = <$IN>){
 close $IN;
 
 open(my $OUT, "> $opts{o}");
-foreach my $genes (sort{scalar(@{$storage{$b}}) <=> scalar(@{$storage{$a}})} keys(%storage)){
+foreach my $genes (sort{scalar(keys %{$storage{$b}}) <=> scalar(keys %{$storage{$a}})} keys(%storage)){
 	# Sort by number of different scaffold spans!
 	print $OUT "$genes";
 	foreach my $contigs (keys(%{$storage{$genes}})){
