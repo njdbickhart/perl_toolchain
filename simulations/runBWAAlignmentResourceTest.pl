@@ -20,7 +20,7 @@ open(my $LOG, "> $opts{l}");
 
 print STDERR "ALIGN\n";
 # First, the alignment
-runProfileCommand("ALIGN", "bwa mem $opts{f} $opts{r} $opts{o}.sam", $LOG);
+runProfileCommand("ALIGN", "bwa mem $opts{g} $opts{f} $opts{r} > $opts{o}.sam", $LOG);
 
 print STDERR "BAM\n";
 # Now the Bam conversion
@@ -81,6 +81,10 @@ sub runProfileCommand{
 
 sub getMem{
 	my ($pid) = @_;
-    	my $memory = split / /, slurp("/proc/$pid/statm");
-    	return $memory;
+	if( -s "/proc/$pid/statm"){
+    		my $memory = split / /, slurp("/proc/$pid/statm");
+    		return $memory;
+	}else{
+		return 0;
+	}
 }
