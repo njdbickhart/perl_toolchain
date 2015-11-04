@@ -31,8 +31,11 @@ while(my $line = <$IN>){
 		push(@{$chrkey{$rnum}}, $dsegs[0]);
 		push(@{$poskey{$rnum}}, $dsegs[1]);
 	}
+	$rnum++;
 }
 close $IN;
+
+print "Finished loading key\n";
 
 # Now to read the bam and tabulate the scores
 my @types = ("CORRECT", "ONECORRECT", "MISSED");
@@ -74,6 +77,7 @@ while(my $line = <$IN>){
 }
 
 close $IN;
+print "Finished processing bam file\n";
 
 # Now to do the counting
 my %endstats;
