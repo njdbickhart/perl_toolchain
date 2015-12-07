@@ -184,7 +184,7 @@ while(my $line = <IN>){
 	fork { sub => \&runBWAAligner, 
 		args => [$segs[0], $segs[1], $refgenome, $reffai, $outputfolder, $segs[-1], $segs[-2], $counter{$segs[-1]}, $log, $errorlog, $javaexe, $javaarg, $picardfolder, $logmsg], 
 		max_proc => $threads };
-	#runBWAAligner($segs[0], $segs[1], $refgenome, $reffai, $outputfolder, $segs[-1], $segs[-2], $counter{$segs[-1]}, $log, $javaexe, $picardfolder);
+	#runBWAAligner($segs[0], $segs[1], $refgenome, $reffai, $outputfolder, $segs[-1], $segs[-2], $counter{$segs[-1]}, $log, $errorlog, $javaexe, $javaarg, $picardfolder, $logmsg);
 	push(@{$bams{$segs[-1]}}, "$outputfolder/$segs[-1]/$segs[-1].$counter{$segs[-1]}.nodup.bam");
 }
 close IN;
@@ -388,9 +388,9 @@ sub runBWAAligner{
 	
 	# Run the BWA mem command and create a bam file from the sam file
 	$log->Info("BWAALIGNER", "bwa mem -R '\@RG\\tID:$base.$num\\tLB:$lib\\tPL:ILLUMINA\\tSM:$base\' -v 1 -M $ref $fq1 $fq2 > $bwasam");
-	#system("bwa mem -R '\@RG\\tID:$base.$num\\tLB:$lib\\tPL:ILLUMINA\\tSM:$base\' -v 1 -M $ref $fq1 $fq2 > $bwasam");
-	my $pid = open3($in, "> $bwasam", ">&TMPERR", "bwa mem -R '\@RG\\tID:$base.$num\\tLB:$lib\\tPL:ILLUMINA\\tSM:$base\' -v 1 -M $ref $fq1 $fq2");
-	waitpid($pid, 0);    
+	system("bwa mem -R '\@RG\\tID:$base.$num\\tLB:$lib\\tPL:ILLUMINA\\tSM:$base\' -v 1 -M $ref $fq1 $fq2 > $bwasam");
+	#my $pid = open3($in, "> $bwasam", ">&TMPERR", "bwa mem -R '\@RG\\tID:$base.$num\\tLB:$lib\\tPL:ILLUMINA\\tSM:$base\' -v 1 -M $ref $fq1 $fq2");
+	#waitpid($pid, 0);    
     	
 	my $samreader = SamFileReader->new('log' => $log);
 	$samreader->prepSam($bwasam);
@@ -401,14 +401,14 @@ sub runBWAAligner{
 	#system("samtools sort $bwabam $bwasort");
 	#system("samtools index $bwasort.bam");
 	$log->Info("BWAALIGNER", "$java $javaarg -jar $picarddir/MarkDuplicates.jar INPUT=$bwabam OUTPUT=$bwadedupbam METRICS_FILE=$bwadedupbam.metrics VALIDATION_STRINGENCY=LENIENT");
-	#system("$java $javaarg -jar $picarddir/MarkDuplicates.jar INPUT=$bwabam OUTPUT=$bwadedupbam METRICS_FILE=$bwadedupbam.metrics VALIDATION_STRINGENCY=LENIENT");
-	my $pid = open3($in, ">&TMPOUT", ">&TMPERR", "$java $javaarg -jar $picarddir/MarkDuplicates.jar INPUT=$bwabam OUTPUT=$bwadedupbam METRICS_FILE=$bwadedupbam.metrics VALIDATION_STRINGENCY=SILENT");
-	waitpid($pid, 0);	
+	system("$java $javaarg -jar $picarddir/MarkDuplicates.jar INPUT=$bwabam OUTPUT=$bwadedupbam METRICS_FILE=$bwadedupbam.metrics VALIDATION_STRINGENCY=LENIENT");
+	#my $pid = open3($in, ">&TMPOUT", ">&TMPERR", "$java $javaarg -jar $picarddir/MarkDuplicates.jar INPUT=$bwabam OUTPUT=$bwadedupbam METRICS_FILE=$bwadedupbam.metrics VALIDATION_STRINGENCY=SILENT");
+	#waitpid($pid, 0);	
 	
 	$log->Info("BWAALIGNER", "samtools index $bwadedupbam");
-	#system("samtools index $bwadedupbam");
-	my $pid = open3($in, ">&TMPOUT", ">&TMPERR", "samtools index $bwadedupbam");
-	waitpid($pid, 0);
+	system("samtools index $bwadedupbam");
+	#my $pid = open3($in, ">&TMPOUT", ">&TMPERR", "samtools index $bwadedupbam");
+	#waitpid($pid, 0);
 	
 	# If the bam file exists and is not empty, then remove the sam file
 	if( -s $bwabam){
