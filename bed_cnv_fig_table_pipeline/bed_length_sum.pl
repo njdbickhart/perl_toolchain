@@ -13,7 +13,7 @@ if(scalar(@ARGV) == 0){
 }
 
 my @int_lens;
-while (my $line = <STDIN>){
+while (my $line = <$FH>){
 	chomp $line;
 	$line =~ s/\r//g;
 	my @segs = split(/\t/, $line);
