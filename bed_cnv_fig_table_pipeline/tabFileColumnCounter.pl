@@ -124,6 +124,7 @@ sub readFile{
 	
 	while(my $line = <$fh>){
 		chomp($line);
+		$line =~ s/\r//g;
 		$line =~ s/^\s+//;
 		
 		if($self->has_ignore){
