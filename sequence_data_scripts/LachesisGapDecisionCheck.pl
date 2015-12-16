@@ -3,11 +3,11 @@
 # perpendicular datasets to make a decision for orientation
 
 use strict;
-use GetOpt::Std;
+use Getopt::Std;
 
 my %opts;
-getopt('cgbfuo', \%opts);
-my $usage = "perl $0 -c <contig list coords> -g <gap coords> -b <BND interchrom bedpe> -f <filled gaps> -u <unfilled gaps> -o <output base>\n";
+getopt('cgbfuoe', \%opts);
+my $usage = "perl $0 -c <contig list coords> -g <gap coords> -e <sv evidence bed> -b <BND interchrom bedpe> -f <filled gaps> -u <unfilled gaps> -o <output base>\n";
 
 unless(defined($opts{'c'}) && defined($opts{'b'}) && defined($opts{'f'}) && defined($opts{'u'}) && defined($opts{'o'})){
 	 print $usage;
@@ -18,7 +18,7 @@ my $worker = eventWorkhorse->new('filename' => $opts{'g'});
 $worker->loadGapInfo();
 print STDERR "Loaded gap site file\n";
 
-$worker->associateWithSites($opts{'b'}, $opts{'f'}, $opts{'u'});
+$worker->associateWithSites($opts{'b'}, $opts{'f'}, $opts{'u'}, $opts{'e'});
 print STDERR "Finished association\n";
 
 $worker->printOutGapSites($opts{'o'});
@@ -30,7 +30,7 @@ package eventWorkhorse;
 use Mouse;
 use namespace::autoclean;
 
-our @FILETYPES = ('FILLED', 'UNFILLED', 'BND');
+our @FILETYPES = ('FILLED', 'UNFILLED', 'BND', 'SV');
 
 # hash ref is ordered by name 
 has 'data' => (is => 'rw', isa => 'HashRef[event]');
@@ -42,7 +42,8 @@ sub loadGapInfo{
 	my ($self) = @_;
 	
 	my %data;
-	open(my $IN, "< $self->filename") || die "Could not open input file!\n";
+	my $file = $self->filename;
+	open(my $IN, "< $file") || die "Could not open input file!\n";
 	while(my $line = <$IN>){
 		chomp $line;
 		my @segs = split(/\t/, $line);
@@ -52,6 +53,7 @@ sub loadGapInfo{
 			'name' => $segs[3]);
 	}
 	close $IN;
+	$self->data(\%data);
 }
 
 sub printOutGapSites{
@@ -65,21 +67,28 @@ sub printOutGapSites{
 		my @types;
 		if(exists($assoc->{'FILLED'}->{$name})){
 			push(@types, 'FILLED');
-		}elsif(exists($assoc->{'UNFILLED'}->{$name})){
-			push(@types, 'UNFILLED');
-		}elsif(exists($assoc->{'BND'}->{$name})){
-			push(@types, $assoc->{'BND'}->{$name}->name);
+		}
+			if(exists($assoc->{'UNFILLED'}->{$name})){
+				push(@types, 'UNFILLED');
+			}
+			if(exists($assoc->{'BND'}->{$name})){
+				push(@types, $assoc->{'BND'}->{$name}->name);
+			}
+		my $sv = 0;
+		if(exists($assoc->{'SV'}->{$name})){
+			$sv = $assoc->{'SV'}->{$name}->name;
 		}
 		
 		my $ref = $data->{$name}->getOutArray;
 		push(@{$ref}, join("/", @types));
+		push(@{$ref}, $sv);
 		print {$OUT} join("\t", @{$ref}) . "\n";
 	}
 	close $OUT;
 }
 
 sub associateWithSites{
-	my ($self, $bnd, $filled, $unfilled) = @_;
+	my ($self, $bnd, $filled, $unfilled, $sv) = @_;
 	my $file = $self->filename;
 	
 	# Easy filled sites
@@ -107,8 +116,37 @@ sub associateWithSites{
 	}
 	close $IN;
 	
+	# SV site overlap count
+	open($IN, "intersectBed -a $file -b $sv -wb |");
+        while(my $line = <$IN>){
+                chomp $line;
+                my @segs = split(/\t/, $line);
+                $assoc{"SV"}->{$segs[3]} = event->new('chr'=> $segs[0],
+                        'start' => $segs[1],
+                        'end' => $segs[2],
+                        'name' => $segs[-1]);
+        }
+        close $IN;
+
+
 	# complex bnd events
-	open($IN, "intersectBed -a $file -b $bnd -wb |");
+	# I need to extend the gap regions out a bit
+	open(my $OUT, "> gap_coords_extend.bed");
+	open($IN, "< $file");
+	while(my $line = <$IN>){
+		chomp $line;
+		my @segs = split(/\t/, $line);
+		$segs[1] -= 5000;
+		$segs[2] += 5000;
+		if($segs[1] < 0){
+			$segs[1] = 0;
+		}
+		print {$OUT} join("\t", @segs) . "\n";
+	}
+	close $IN;
+	close $OUT;
+
+	open($IN, "intersectBed -a gap_coords_extend.bed -b $bnd -wb |");
 	while(my $line = <$IN>){
 		chomp $line;
 		my @segs = split(/\t/, $line);
@@ -137,7 +175,7 @@ package event;
 use Mouse;
 use namespace::autoclean;
 
-has ['chr','name'] => (is => 'ro', isa => 'Str');
+has ['chr','name'] => (is => 'ro', isa => 'Any');
 has ['start', 'end'] => (is => 'ro', isa => 'Int');
 
 sub getOutArray{

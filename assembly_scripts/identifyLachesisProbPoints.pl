@@ -96,6 +96,7 @@ sub produceLocations{
 		my $curchrlen = $self->getc($curchr);
 		my $curlo = $self->lo->[$x];
 		my $currho = $self->rho->[$x];
+		my $end = $curpos + $curchrlen;
 		if($lastcluster != $self->clusters->[$x]){
 			# The lachesis cluster changed -- print out any errors that extend to the end!
 			if($error){
@@ -114,8 +115,8 @@ sub produceLocations{
 		if($error && $rhoisproper && $rholomatch){
 			# The end point of the error region
 			print {$OUT} "cluster_$lastcluster\t$start\t$curpos\t$secondstart\n";
-			$error = 0;
-		}elsif($rhoisproper && !$rholomatch){
+			$error = 0; $secondstart = 0;
+		}elsif(!$error && $rhoisproper && !$rholomatch){
 			# The beginning of the error region
 			$start = $curpos;
 			$error = 1;
