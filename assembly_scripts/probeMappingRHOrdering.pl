@@ -1,11 +1,17 @@
 #!/usr/bin/perl
 # This script is designed to process a BAM file and the RH order file in order to assign contigs/scaffolds to chromosomes
+# Adding feature to translate Brian's RH map text into an order file, directly
 
 use strict;
 
 chomp(@ARGV);
-my $usage = "perl $0 <rh order file> <bam files with probe mappings> <output file>\n";
+my $usage = "perl $0 <rh order file> <bam files with probe mappings> <output file>
+	OR
+perl $0 <rh order file> <output file>\n";
 unless(scalar(@ARGV) == 3){
+	if(scalar(@ARGV) == 2){
+
+	}
 	print $usage;
 	exit;
 }
@@ -134,6 +140,33 @@ sub readBAMinfo{
 	$self->probePacBio(\%pacbio);
 	close $IN;
 }
+
+sub translateRHProbeOrder{
+	my ($self, $input) = @_;
+	open(my $IN, "< $input") || die "Could not find input file!\n";
+        my $header = <$IN>;
+
+        local $| = 1;
+        my $idx = 0;
+        my @probes; my %probechrs; my %probeidx;
+        while(my $line = <$IN>){
+                chomp $line;
+                my @segs = split(/\t/, $line);
+
+                push(@probes, $segs[0]);
+                $probechrs{$segs[0]} = $segs[1];
+                $probeidx{$segs[0]} = $idx;
+                #$self->addprobe($segs[0]);
+                #$self->setprobechr($segs[0] => $segs[1]);
+                #$self->setprobeidx($segs[0] => $idx);
+                $idx++;
+                if($idx % 5000 == 0){
+                	print "At\t$idx\r";
+                }
+        }
+}
+	
+                
 
 sub getRHProbeOrder{
 	my ($self, $input) = @_;
