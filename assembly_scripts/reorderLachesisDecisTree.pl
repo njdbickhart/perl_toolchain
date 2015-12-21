@@ -3,6 +3,7 @@
 
 use strict;
 use Getopt::Std;
+use Clone;
 
 my %opts;
 my $usage = "perl $0 -t <tab decision file> -f <input fasta> -i <input fai> -o <output basename>\n";
@@ -29,7 +30,7 @@ BEGIN{
 package LachWorker;
 use Mouse;
 use namespace::autoclean;
-use Clone;
+use Clone 'clone';
 
 # hash: {chr num} -> [] -> lachClusters
 has 'lachclusters' => (is => 'rw', isa => 'HashRef[Any]');
@@ -60,20 +61,22 @@ sub generateOutput{
 	my %lens = %{$self->chrlens};
 	my $currentpos = 0;
 	foreach my $clust (sort{$a <=> $b} keys(%data)){
-		$currentpos = 0;
-		my $chrlen = $lens{$clust};
+		$currentpos = 1;
+		#my $chrlen = $lens{$clust};
 		my $seq;
 		my @lclust = sort{$a->lowest <=> $b->lowest} @{$data{$clust}};
 		for(my $x = 0; $x < scalar(@lclust); $x++){
 			# Should be sorted and ready for printout!
 			my @ordered = $lclust[$x]->getOrderedArray();
+			my $end = 1;
 			for(my $y =0; $y < scalar(@ordered); $y++){
 				my $o = $ordered[$y];
-				my $end = $currentpos + $chrlen;
+				my $chrlen = $lens{$o->contig};
+				$end = $currentpos -1 + $chrlen;
 				my $partnum = $x + $y;
 				my $contig = $o->contig;
 				print {$AGP} $o->clustid . "\t" . $currentpos . "\t" . $end . "\t";
-				print {$AGP} $partnum . "\tF\t" . $o->contig . "\t0\t$chrlen\t" . $o->lo;
+				print {$AGP} $partnum . "\tF\t" . $o->contig . "\t1\t$chrlen\t" . $o->lo;
 				print {$AGP} "\n";
 				
 				# Taking care of the fasta
@@ -94,23 +97,25 @@ sub generateOutput{
 				$seq .= $tseq;
 				
 				if($y < scalar(@ordered) - 1){
-					$currentpos = $end; 
+					$currentpos = $end + 1; 
 					$end += 5;
 					# Now to print the gap
 					print {$AGP} $o->clustid . "\t" . $currentpos . "\t" . $end . "\tU\t5\tscaffold\tyes\tmap\n";
 					$seq .= "nnnnn";
 				}
-				$currentpos = $end;
+				$currentpos = $end + 1;
 			}
 			if($x < scalar(@ordered) - 1){
-				$currentpos = $end; 
+				$currentpos = $end + 1; 
 				$end += 5;
 				# Printing a gap if we're not at the end
-				print {$AGP} $o->clustid . "\t" . $currentpos . "\t" . $end . "\tU\t5\tscaffold\tyes\tmap\n";
-				$currenpos = $end;
+				print {$AGP} "$clust\t" . $currentpos . "\t" . $end . "\tU\t5\tscaffold\tyes\tmap\n";
+				$currentpos = $end + 1;
+				$seq .= "nnnnn";
 			}
 		}
 		$seq =~ s/(.{1,60})/$1\n/gs;
+		print {$FA} ">cluster_$clust\n";
 		print {$FA} $seq;
 	}
 	close $AGP;
@@ -141,20 +146,23 @@ sub generateClusters{
 			$currentclust->add($lastmember);
 			$lastchr = $segs[0];
 		}elsif($lastchr ne $segs[0] || $prob){
-			if(!remove){
-				$currentclust->add($lastmember)
-			}
 			push(@{$final{$currentclust->clustid}}, clone($currentclust));
 			$currentclust = LachCluster->new('clustid' => $segs[0]);
+			if(!$remove){
+				$currentclust->add($lastmember)
+			}
+			#push(@{$final{$currentclust->clustid}}, clone($currentclust));
+			#$currentclust = LachCluster->new('clustid' => $segs[0]);
 			$lastchr = $segs[0];
 		}else{
-			if(!remove){
+			if(!$remove){
 				$currentclust->add($lastmember);
 			}
 			$lastchr = $segs[0];
 		}
 	}
 	push(@{$final{$currentclust->clustid}}, clone($currentclust));
+	$self->lachclusters(\%final);
 	close $IN;
 }
 				
@@ -188,7 +196,7 @@ sub getOrderedArray{
 	
 	for(my $x = 0; $x < scalar(@array); $x++){
 		if($reverse){
-			$array[$x]->lo(($array->lo eq "+")? "-" : "+");
+			$array[$x]->lo(($array[$x]->lo eq "+")? "-" : "+");
 		}
 		push(@values, $array[$x]);
 	}
@@ -207,12 +215,15 @@ sub _getorder{
 		}
 	}
 	
-	if(scalar(@nums) == 1){
-		@b = split(";", $orients[0]);
+	if(scalar(@nums) < 2){
+		if(scalar(@nums) == 0){
+			return 0; # no idea!
+		}
+		my @b = split(";", $orients[0]);
 		if($b[0] ne $b[1]){
-			return 0; # needs to be reversed
+			return 1; # needs to be reversed
 		}else{
-			return 1; # in the same order
+			return 0; # in the same order
 		}
 	}else{
 		if($nums[1] - $nums[0] >= 0){
