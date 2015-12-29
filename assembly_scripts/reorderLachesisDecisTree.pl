@@ -60,6 +60,7 @@ sub generateOutput{
 	my %data = %{$self->lachclusters};
 	my %lens = %{$self->chrlens};
 	my $currentpos = 0;
+	my %usedcntgs;
 	foreach my $clust (sort{$a <=> $b} keys(%data)){
 		$currentpos = 1;
 		#my $chrlen = $lens{$clust};
@@ -75,6 +76,7 @@ sub generateOutput{
 				$end = $currentpos -1 + $chrlen;
 				my $partnum = $x + $y;
 				my $contig = $o->contig;
+				$usedcntgs{$contig} = 1;
 				print {$AGP} $o->clustid . "\t" . $currentpos . "\t" . $end . "\t";
 				print {$AGP} $partnum . "\tF\t" . $o->contig . "\t1\t$chrlen\t" . $o->lo;
 				print {$AGP} "\n";
@@ -90,11 +92,20 @@ sub generateOutput{
 				}
 				close $SEQ;
 				
+				my $revcomp = 0;
 				if($lclust[$x]->revorder){
-					$tseq = reverse($tseq);
-					$tseq =~ tr/ACGT/TGCA/;
+					$revcomp = ($o->lo eq "+")? 1 : 0;
+				}else{
+					$revcomp = ($o->lo eq "+")? 0 : 1;
 				}
-				$seq .= $tseq;
+
+				if($revcomp){
+					my $revseq = reverse($tseq);
+					$revseq =~ tr/ACGT/TGCA/;
+					$seq .= $revseq;
+				}else{
+					$seq .= $tseq;
+				}
 				
 				if($y < scalar(@ordered) - 1){
 					$currentpos = $end + 1; 
@@ -118,6 +129,23 @@ sub generateOutput{
 		print {$FA} ">cluster_$clust\n";
 		print {$FA} $seq;
 	}
+	# Add unclustered contigs at the end
+	open(my $FAI, "< $fasta.fai");
+	while(my $line = <$FAI>){
+		chomp $line;
+		my @segs = split(/\t/, $line);
+		if(!exists($usedcntgs{$segs[0]})){
+			open(my $CNT, "samtools faidx $fasta $segs[0]:1-$segs[1] |");
+			my $head = <$CNT>;
+			print {$FA} ">$segs[0]\n";
+			print {$AGP} "$segs[0]\t1\t$segs[1]\t1\tF\t$segs[0]\t1\t$segs[1]\t+\n";
+			while(my $line = <$CNT>){
+				print {$FA} $line;
+			}
+			close $CNT;
+		}
+	}
+	close $FAI;
 	close $AGP;
 	close $FA;
 }
