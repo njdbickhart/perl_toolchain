@@ -94,9 +94,9 @@ sub generateOutput{
 				
 				my $revcomp = 0;
 				if($lclust[$x]->revorder){
-					$revcomp = ($o->lo eq "+")? 1 : 0;
+					$revcomp = ($o->lo eq "+" && ($o->rho eq "-"))? 1 : 0;
 				}else{
-					$revcomp = ($o->lo eq "+")? 0 : 1;
+					$revcomp = ($o->lo eq "+" && ($o->rho eq "-"))? 0 : 1;
 				}
 
 				if($revcomp){
@@ -173,14 +173,19 @@ sub generateClusters{
 			$currentclust = LachCluster->new('clustid' => $segs[0]);
 			$currentclust->add($lastmember);
 			$lastchr = $segs[0];
-		}elsif($lastchr ne $segs[0] || $prob){
+		}elsif($prob){
+			if(!$remove){
+				$currentclust->add($lastmember);
+			}
+			push(@{$final{$currentclust->clustid}}, clone($currentclust));
+			$currentclust = LachCluster->new('clustid' => $segs[0]);
+			$lastchr = $segs[0];
+		}elsif($lastchr ne $segs[0]){	
 			push(@{$final{$currentclust->clustid}}, clone($currentclust));
 			$currentclust = LachCluster->new('clustid' => $segs[0]);
 			if(!$remove){
-				$currentclust->add($lastmember)
+				$currentclust->add($lastmember);
 			}
-			#push(@{$final{$currentclust->clustid}}, clone($currentclust));
-			#$currentclust = LachCluster->new('clustid' => $segs[0]);
 			$lastchr = $segs[0];
 		}else{
 			if(!$remove){
@@ -235,7 +240,7 @@ sub _getorder{
 	my ($self) = @_;
 	my @nums; my @orients;
 	foreach my $v (@{$self->members}){
-		if($v->rhp eq '.'){
+		if($v->rhp eq '.' || $v->rhp eq '?'){
 			next;
 		}else{
 			push(@nums, $v->rhp);
@@ -266,7 +271,7 @@ sub _findlowest{
 	my ($self) = @_;
 	my $min = 500;
 	foreach my $v (@{$self->members}){
-		if($v->rhp ne "." && $v->rhp < $min){
+		if($v->rhp ne "." && $v->rhp ne '?' && $v->rhp < $min){
 			$min = $v->rhp;
 		}
 	}
