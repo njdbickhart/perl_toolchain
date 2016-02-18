@@ -33,3 +33,16 @@ $ cpanm --verbose Forks::Super
 ```
 
 This should install the library properly after a lengthy series of tests.
+
+# Directory contents
+Each directory contains individual, stand-alone scripts that are meant to process specific datasets or perform specific forms of analysis. The README.md file within each directory contains usage information and brief summaries of the scripts in order to aid user adoption. In general, the directory contents follow this structure:
+
+
+* **assembly_scripts**		Contains scripts to process genome assembly data or statistics
+* **bed_cnv_fig_table_pipeline**	Contains scripts that summarize bed file contents
+* **personal_modules**	A private library that contains modules that are used commonly in my scripts
+* **sequence_data_pipeline**	A pipeline for processing Illumina sequence data
+* **sequence_data_scripts**	Contains scripts that parse sequence data files and create summary statistics
+* **simulations**	Contains scripts devoted to simulation and simulated data
+* **snp_utilities**	Contains scripts for analyzing and summarizing SNP data formats
+* **vcf_utils**	Specific utilities designed for navigating VCF files
