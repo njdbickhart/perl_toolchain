@@ -32,32 +32,32 @@ while(my $line = <IN>){
 		print OUT "$segs[0]\t$segs[1]\t$segs[3]\t$segs[4]\t$segs[5]\t";
 		#INDEL;IS=4,1.000000;DP=84;VDB=1.008941e-02;AF1=0.9542;AC1=138;DP4=2,2,52,8;MQ=28;FQ=-8.94;PV4=0.11,1,0.19,1;EFF=INTERGENIC(MODIFIER||||||||||1)
 		my @infosegs = split(/;/, $segs[7]);
-		if($infosegs[0] eq "INDEL"){
+		if($infosegs[0] eq "INDEL" || length($segs[3]) > 1 || length($segs[4]) > 1){
 			print OUT "INDEL";
 		}else{
 			print OUT "SNP";
 		}
 		
+		#ANN=T|intergenic_region|MODIFIER|RAB4A|ENSBTAG00000018857|intergenic_region|ENSBTAG00000018857|||||||||;DR2=0.996;AF=0.116
+		#ANN=CTCCTGGAGTTGGTGATGG|intron_variant|MODIFIER|RAB4A|ENSBTAG00000018857|transcript|ENSBTAT00000049768|protein_coding|3/7|c.227+1444_227+1445insTCCTGGAGTTGGTGATG||||||
 		#EFF=SYNONYMOUS_CODING(LOW|SILENT|acG/acA|T334|581|PRLR|protein_coding|CODING|ENSBTAT00000014437|9|1)
-		my @annosegs = split(/,/, $infosegs[-1]);
+		
+		#my @annosegs = split(/,/, $infosegs[-1]);
 		my @mutation;
 		my @priority;
 		my @gene;
 		my @aas;
 		my ($m, $p, $g, $aa);
-		foreach my $a (@annosegs){
-			$a =~ s/EFF=//g;
-			($m) = $a =~ /(.+)\(.*\)/;
-			my ($str) = $a =~ /.+\((.*)\)/;
-			my @effsegs = split(/\|/, $str);
-			$p = $effsegs[0];
-			$g = $effsegs[5];
-			$aa = $effsegs[3];
-			push(@aas, $aa);
-			push(@mutation, $m);
-			push(@priority, $p);
-			push(@gene, $g);
+		foreach my $i (@infosegs){
+			if($i =~ /ANN=(.+$)/){
+				my @effsegs = split(/\|/, $1);
+				push(@mutation, $effsegs[1]);
+				push(@aas, $effsegs[10]);
+				push(@priority, $effsegs[2]);
+				push(@gene, "$effsegs[3];$effsegs[4]");
+			}
 		}
+		
 		
 		print OUT "\t" . join(';', @mutation) . "\t" . join(';', @priority) . "\t" . join(';', @gene) . "\t" . join(';', @aas);
 		

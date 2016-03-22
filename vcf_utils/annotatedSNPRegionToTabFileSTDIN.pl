@@ -30,24 +30,19 @@ while(my $line = <STDIN>){
 		}
 		
 		#EFF=SYNONYMOUS_CODING(LOW|SILENT|acG/acA|T334|581|PRLR|protein_coding|CODING|ENSBTAT00000014437|9|1)
-		my @annosegs = split(/,/, $infosegs[-1]);
 		my @mutation;
 		my @priority;
 		my @gene;
 		my @aas;
 		my ($m, $p, $g, $aa);
-		foreach my $a (@annosegs){
-			$a =~ s/EFF=//g;
-			($m) = $a =~ /(.+)\(.*\)/;
-			my ($str) = $a =~ /.+\((.*)\)/;
-			my @effsegs = split(/\|/, $str);
-			$p = $effsegs[0];
-			$g = $effsegs[5];
-			$aa = $effsegs[3];
-			push(@aas, $aa);
-			push(@mutation, $m);
-			push(@priority, $p);
-			push(@gene, $g);
+		foreach my $i (@infosegs){
+			if($i =~ /ANN=(.+$)/){
+				my @effsegs = split(/\|/, $1);
+				push(@mutation, $effsegs[1]);
+				push(@aas, $effsegs[10]);
+				push(@priority, $effsegs[2]);
+				push(@gene, "$effsegs[3];$effsegs[4]");
+			}
 		}
 		
 		print  "\t" . join(';', @mutation) . "\t" . join(';', @priority) . "\t" . join(';', @gene) . "\t" . join(';', @aas);
