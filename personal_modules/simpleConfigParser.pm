@@ -21,6 +21,7 @@ sub loadConfigFile{
 			next;
 		}
 		chomp $line;
+		$line =~ s/\r//g;
 		my @segs = split(/\=/, $line);
 		$self->put($segs[0] => $segs[1]);
 	}

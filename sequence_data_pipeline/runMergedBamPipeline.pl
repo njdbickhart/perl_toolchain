@@ -4,8 +4,9 @@
 # bam, and an annotated VCF of SNPs and INDELs.
 # Spreadsheet columns:
 # 	fq1\tfq2\tlibraryname\tanimalname
-# 9/8/2015 -- Version 0.0.2: 	Added  javaArg required config key to tune JVM runtime parameters
+# 9/8/2015  -- Version 0.0.2: 	Added  javaArg required config key to tune JVM runtime parameters
 #				Also Added STDERR logger
+# 3/22/2016 -- Version 0.0.3: 	Added advanced help and config file carriage return compability
 
 use strict;
 use Getopt::Long;
@@ -27,7 +28,7 @@ my @requiredConfig = ("java", "picard", "snpeff", "fastqc", "runSNP", "runEFF", 
 my $scriptdir = dirname(__FILE__);
 
 my $usage = "perl $0 --fastqs <spreadsheet to be processed> --output <base output folder> --reference <reference genome fasta>
-Version 0.0.2
+Version 0.0.3
 Arguments:
 	--fastqs	A tab-delimited spreadsheet with fastq file locations and read group info
 	--output	The base output folder for all bams and vcfs
@@ -37,17 +38,24 @@ Optional:
 	--config	Override default configuration (searches for ~/.mergedpipeline.cnfg by default)
 	--coords	Reference genome fasta coordinates for threaded SNP calling
 	--threads	Number of threads to fork (default: 1)
+	--help		Advanced help menu (overrides all other commands);
 	";
 
 $configfile = "$ENV{HOME}/.mergedpipeline.cnfg";
 $threads = 1;
+my $advhelp = 0;
 	
 GetOptions("config=s" => \$configfile,
 	"fastqs=s" => \$spreadsheet,
 	"output=s" => \$outputfolder,
 	"reference=s" => \$refgenome,
 	"coords=s" => \$fastacoords, 
-	"threads=i" => \$threads);
+	"threads=i" => \$threads, 
+	"help" => \$advhelp);
+
+if($advhelp){
+	printAdvancedHelp();
+}
 	
 if(!defined($spreadsheet) || !defined($outputfolder)){
 	print $usage;
@@ -460,4 +468,63 @@ sub runSamtoolsBCFCaller{
 	}
 	
 	print "Finished creating bcf on chr: $chr\n";
+}
+
+sub printAdvancedHelp{
+print "
+|******************************************|
+|    runMergedBamPipeline Advanced Help    |
+|******************************************|
+
+Initial setup of configuration and scripts:
+--------------------------------------------
+	This pipeline requires initial configuration in order to find the appropriate scripts and programs needed to run all settings.
+This help menu assumes that you have run the initial perl_toolchain configuration scripts (step1.sh, step2.sh, etc) and that you have downloaded
+the following programs and placed them on your PATH: bwa, samtools, bcftools, java(version 1.8), SNPEff and PicardTools. 
+
+	The configuration file defaults to: ~/.mergedpipeline.cnfg and you must at least create this file (or generate a separate file, and run it
+using the --config argument) before using the pipeline. A configuration file needs the following entries filled:
+	java=<the path to the java executable, including the java executable>
+	picard=<the path to the picard jar folder>
+	snpeff=<the path to the SNPEff jar folder>
+	fastqc=<the path to the fastqc executable>
+	runSNP=<boolean flag (values = 0 (don't run) or 1 (run)) to run samtools snp calling>
+	runEFF=<boolean flag (values = 0 (don't run) or 1 (run)) to run snpEff on snp calling results>
+	runFQC=<boolean flag (values = 0 (don't run) or 1 (run)) to run fastQC on fastq files>
+	javaArg=<java executable runtime flags (can be left blank if unsure)> 
+	
+Note that BWA alignment will always be run on fastq files. All the above entries are mandatory and must be filled with text or numbers.
+
+Setting up a spreadsheet for finding files:
+-------------------------------------------
+	In order to process files sequentially, the pipeline needs to know where each fastq file is located. In order to feed this information
+to the script, you must create a spreadsheet, tab-delimited file ahead of time giving all of the file locations. A spreadsheet file contains the following
+tab-delimited information:
+	Column 1	Read 1 fastq file
+	Column 2	Read 2 fastq file
+	Column 3	Library name (this is the name of the physical sequencing library that you used)
+	Column 4	Sample name (this is the name of the biological individual that you sampled for making the library)
+
+This file must be tab delimited and must contain at least four columns per row (using the above column scheme). In the case of spreadsheets with longer
+columns per line, the last and second to last column will be used for the sample name and library name, respectively.
+
+Using a reference genome:
+-------------------------
+	The reference genome is perhaps the easiest file to properly configure. For every reference genome you will use, you must:
+	1. Run bwa index on the reference genome (e.g. bwa index my.reference.genome.fasta)
+	2. Run samtools fasta index (e.g. samtools faidx my.reference.genome.fasta)
+	3. Create sequence dictionary with Picard tools (e.g. java -jar CreateSequenceDictionary.jar REFERENCE=my.reference.genome.fasta OUTPUT=my.reference.genome.fasta.dict)
+
+Running the pipeline:
+---------------------
+	After you have set up a proper configuration file, configured your reference genome and created a tab-delimited spreadsheet with all 
+of your fastq file locations, you are set to run the pipeline. You invoke the pipeline using the following command:
+	perl /path/to/runMergedBamPipeline.pl --fastqs your.spreadsheet.tab --reference my.reference.genome.fasta --output baseOutputDirectory
+
+Within the output directory, each sample (defined in the last column of the spreadsheet) will have its own individual directory. Within that directory
+there will be a merged bam file containing all aligned reads, as well as additional output files if you have specified them in the pipeline. There
+will also be a log file in the base output directory that tells you the progress of the pipeline script and stores all error messages.
+	Given the long amount of time it takes to align sequence data, it is advisable to use the --threads option to specify how many cpu threads
+will be devoted to alignment, variant calling, etc. \n";
+exit;
 }
