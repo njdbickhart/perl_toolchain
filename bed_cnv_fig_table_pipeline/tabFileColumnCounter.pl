@@ -2,6 +2,7 @@
 # This script is designed to process a tab delimited file to generate some basic statistics on column field count
 # It only works on columns that have a limited range of possible entries (like enumerated types)
 # 6/12/2015: added a STDIN functionality
+# 4/18/2016: added feature to skip empty lines
 
 use strict;
 use Getopt::Std;
@@ -126,6 +127,9 @@ sub readFile{
 		chomp($line);
 		$line =~ s/\r//g;
 		$line =~ s/^\s+//;
+		if(length($line) < 2 || $line eq ""){
+			next;
+		}
 		
 		if($self->has_ignore){
 			if($line =~ m/^$com/){
