@@ -138,9 +138,14 @@ sub readFile{
 		}
 		
 		my @segs = split(/\t/, $line);
+		if(scalar(@segs) < $col + 1){next;}
 		$hash{$segs[$col]} += 1;
 	}
 	close $fh;
+	if(scalar(keys(%hash)) < 1){
+		print STDERR "[ColumnCounter] Did not find any entries within the column specified! Please check file contents!\n";
+		exit;
+	}
 	$self->counter(\%hash);
 		
 }
