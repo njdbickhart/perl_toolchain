@@ -66,7 +66,11 @@ sub ProcessGapFQ{
 	my $self = shift(@_);
 	
 	# Align gap reads with bwa
-	system("bwa mem " . $self->Sref . " $gapFQ1 $gapFQ2 > $pairSam");
+	if( -s $pairSam){
+		print STDERR "Found file, processing...\n";
+	}else{
+		system("bwa mem " . $self->Sref . " $gapFQ1 $gapFQ2 > $pairSam");
+	}
 	
 	print STDERR "Finished alignment!\n";
 	
@@ -96,6 +100,9 @@ sub ProcessGapFQ{
 			my $aend = $self->_determineCigarLen($segs[3], $segs[5]);
 			if($store->{$segs[0]}->has_SChr && $store->{$segs[0]}->SChr ne $segs[2]){
 				$store->{$segs[0]}->Type("Trans");
+				$store->{$segs[0]}->TChr($segs[2]);
+				my $TOrient = ($readnum == 1)? "First" : "Second";
+				$store->{$segs[0]}->TOrient($TOrient);
 			}elsif(!($store->{$segs[0]}->has_SChr)){
 				$store->{$segs[0]}->SChr($segs[2]);
 			}
@@ -106,8 +113,8 @@ sub ProcessGapFQ{
 				$store->{$segs[0]}->S1End($aend);
 			}else{
 				$store->{$segs[0]}->O2($orient);
-				$store->{$segs[0]}->S1Start($segs[3]);
-				$store->{$segs[0]}->S1End($aend);
+				$store->{$segs[0]}->S2Start($segs[3]);
+				$store->{$segs[0]}->S2End($aend);
 			}
 		}
 	}
@@ -145,9 +152,52 @@ sub PrepareGapRegions{
 		$chrsizes{$segs[0]} = $segs[1];
 	}
 	close $FAI;
+
+	# check to see if files exist and use them
+	if( -s $gapBed){
+		if( -s $gapFQ1 && -s $gapFQ2){
+			print STDERR "Identified all temporary files, skipping...\n";
+			my $prevgapS; my $prevgapE; my $prevgapC = "NA";
+			my $count = 0; my %store;
+
+			open(my $BED, "< $gapBed") || die "Could not open Gap Bed file!\n";
+			while(my $line = <$BED>){
+                		chomp $line;
+		                my @segs = split(/\t/, $line);
+                		my $chrlen = $chrsizes{$segs[0]};
+		                my $gaplen = $segs[2] - $segs[1];
+
+                		if($segs[1] < 1000 || $segs[2] > $chrlen - 500){
+                        		# Beginning of chromosome or too close to the end
+		                }elsif($gaplen < 5){
+                	        }elsif($prevgapC eq $segs[0] && ($segs[1] - $prevgapS < 500) && ($segs[1] - $prevgapS >= 100)){
+                		        my $e2 = $segs[2] + 500;
+		                        my $rn = "$segs[0]_$segs[1]_$segs[2]";
+                        
+					$store{$rn} = Gap->new('OChr' => $segs[0], 'OGapS' => $segs[1], 'OGapE' => $segs[2]);
+					$count++;
+				}else{
+					my $s1 = $segs[1] - 500;
+					my $e2 = $segs[2] + 500;
+					my $rn = "$segs[0]_$segs[1]_$segs[2]";
+					$store{$rn} = Gap->new('OChr' => $segs[0], 'OGapS' => $segs[1], 'OGapE' => $segs[2]);
+					$count++;
+				}
+		
+				$prevgapS = $segs[1];
+				$prevgapE = $segs[2];
+				$prevgapC = $segs[0];
+			}
+			
+			$self->Storage(\%store);
+			close $BED;
+			return;
+		}
+	}
+	
 	
 	# Generate bed of gaps
-	system($self->Java . " -jar " . $self->GetMask . " -f " . $self->Oref . " -b $gapBed -s $gapStats");
+	system($self->Java . " -jar " . $self->GetMask . " -f " . $self->Oref . " -o $gapBed -s $gapStats");
 	
 	# Parse gaps and make fastq
 	print STDERR "Generated gap regions. Parsing...\n";
@@ -223,7 +273,7 @@ package Gap;
 use Mouse;
 use namespace::autoclean;
 
-foreach my $j ('Type', 'OChr', 'SChr', 'O1', 'O2'){ has $j => (is => 'rw', isa => 'Str', predicate => "has_$j");}
+foreach my $j ('Type', 'OChr', 'SChr', 'TChr', 'TOrient', 'O1', 'O2'){ has $j => (is => 'rw', isa => 'Str', predicate => "has_$j");}
 foreach my $m ('OGapS', 'OGapE', 'S1Start', 'S1End', 'S2Start', 'S2End', 'Sfilled', 'Stotal'){ has $m => (is => 'rw', isa => 'Num', predicate => "has_$m");}
 
 sub DetermineFilled{
@@ -236,8 +286,8 @@ sub DetermineFilled{
 		my $len = $coords[2] - $coords[1]; 
 		if($len < 5){
 			print STDERR "Error assessing gap sequence: $len\n";
-			$self->Sfilled(0);
-			$self->Stotal(0);
+			$self->Sfilled(-1);
+			$self->Stotal($len);
 		}else{
 			$self->Stotal($coords[2] - $coords[1]);
 			open(my $FA, "samtools faidx $ref " . $self->SChr . ":$coords[1]-$coords[2] |");
@@ -275,7 +325,7 @@ sub GetOutString{
 	my $self = shift(@_);
 	my $outStr = "";
 	my $OGaplen = 0;
-	if(!$self->has_type){
+	if(!$self->has_Type){
 		$self->DetermineType();
 	}
 	if($self->has_OGapS && $self->has_OGapE){
@@ -288,8 +338,16 @@ sub GetOutString{
 	
 	$outStr = $self->Type . "\t" . $self->OChr . "\t" . $self->OGapS . "\t" . $self->OGapE . "\t" . $OGaplen . "\t";
 	if($self->has_SChr && (($self->has_S1Start && $self->has_S1End) || ($self->has_S2Start && $self->has_S2End))){
-		my $S1coords = $self->SChr . ":" . $self->S1Start . "-" . $self->S1End;
-		my $S2coords = $self->SChr . ":" . $self->S2Start . "-" . $self->S2End;
+		my $S1coords; my $S2coords;
+		if($self->has_TChr){
+			$S1coords = ($self->TOrient eq "First")? $self->TChr : $self->SChr;
+			$S2coords = ($self->TOrient eq "Second")? $self->TChr : $self->SChr;
+			$S1coords .= ":" . $self->S1Start . "-" . $self->S1End;
+			$S2coords .= ":" . $self->S2Start . "-" . $self->S2End;
+		}else{
+			$S1coords = $self->SChr . ":" . $self->S1Start . "-" . $self->S1End;
+			$S2coords = $self->SChr . ":" . $self->S2Start . "-" . $self->S2End;
+		}
 		$outStr .= $self->SChr . "\t" . $S1coords . "\t" . $S2coords . "\t" . $self->Sfilled . "\t$SPerc\t" . $self->Stotal . "\n";
 	}else{
 		$outStr .= "NA\tNA\tNA\t0\t0.0\t0\n";
