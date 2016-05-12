@@ -1,6 +1,7 @@
 #!/usr/bin/perl
 # This script is designed to run BWA alignment + samtools variant calling
 # and to profile the time/memory it takes to process each step
+# VERSION 0.0.1		Added feature to skip time consuming alignment if sam file is present
 
 use strict;
 use Getopt::Std;
@@ -20,7 +21,12 @@ open(my $LOG, "> $opts{l}");
 
 print STDERR "ALIGN\n";
 # First, the alignment
-runProfileCommand("ALIGN", "bwa mem $opts{g} $opts{f} $opts{r} > $opts{o}.sam", $LOG);
+if( -s "$opts{o}.sam"){
+	print STDERR "Skipping ALIGN! Found sam: $opts{o}.sam!\n";
+	print {$LOG} "ALIGN\tskip\tskip\tskip\n";
+}else{
+	runProfileCommand("ALIGN", "bwa mem $opts{g} $opts{f} $opts{r} > $opts{o}.sam", $LOG);
+}
 
 print STDERR "BAM\n";
 # Now the Bam conversion
