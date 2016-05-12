@@ -61,6 +61,7 @@ sub generateOutput{
 	my %lens = %{$self->chrlens};
 	my $currentpos = 0;
 	my %usedcntgs;
+	my $pnum = 0;
 	foreach my $clust (sort{$a <=> $b} keys(%data)){
 		$currentpos = 1;
 		#my $chrlen = $lens{$clust};
@@ -74,13 +75,14 @@ sub generateOutput{
 				my $o = $ordered[$y];
 				my $chrlen = $lens{$o->contig};
 				$end = $currentpos -1 + $chrlen;
-				my $partnum = $x + $y;
+				
 				my $contig = $o->contig;
 				$usedcntgs{$contig} = 1;
 				print {$AGP} $o->clustid . "\t" . $currentpos . "\t" . $end . "\t";
-				print {$AGP} $partnum . "\tF\t" . $o->contig . "\t1\t$chrlen\t" . $o->lo;
+				print {$AGP} $pnum . "\tF\t" . $o->contig . "\t1\t$chrlen\t" . $o->lo;
 				print {$AGP} "\n";
 				
+				$pnum++;
 				# Taking care of the fasta
 				open(my $SEQ, "samtools faidx $fasta $contig:0-$chrlen |");
 				my $h = <$SEQ>;
@@ -99,6 +101,8 @@ sub generateOutput{
 					$revcomp = ($o->lo eq "+" && ($o->rho eq "-"))? 0 : 1;
 				}
 
+				## This is a test just to use the lachesis ordering
+				$revcomp = ($o->lo eq "+")? 0 : 1;
 				if($revcomp){
 					my $revseq = reverse($tseq);
 					$revseq =~ tr/ACGT/TGCA/;
@@ -124,6 +128,7 @@ sub generateOutput{
 				$currentpos = $end + 1;
 				$seq .= "nnnnn";
 			}
+			$pnum = 0;
 		}
 		$seq =~ s/(.{1,60})/$1\n/gs;
 		print {$FA} ">cluster_$clust\n";
@@ -173,7 +178,7 @@ sub generateClusters{
 			$currentclust = LachCluster->new('clustid' => $segs[0]);
 			$currentclust->add($lastmember);
 			$lastchr = $segs[0];
-		}elsif($prob){
+		}elsif($lastchr eq $segs[0] && $prob){
 			if(!$remove){
 				$currentclust->add($lastmember);
 			}
@@ -185,6 +190,10 @@ sub generateClusters{
 			$currentclust = LachCluster->new('clustid' => $segs[0]);
 			if(!$remove){
 				$currentclust->add($lastmember);
+			}
+			if($prob){
+				push(@{$final{$currentclust->clustid}}, clone($currentclust));
+                        	$currentclust = LachCluster->new('clustid' => $segs[0]);
 			}
 			$lastchr = $segs[0];
 		}else{
