@@ -29,7 +29,7 @@ if($ARGV[0] eq "-o"){
 		my @bs = split(/_/, $s);
 		# Add file numbers that are involved in the estimation
 		foreach my $j (@bs){
-			$involvedFiles{($j + 1)} = 1;
+			$involvedFiles{$j} = 1;
 		}
 		if(scalar(@bs) == 1){
 			$stdoutgroup{$bs[0]} = 1;
