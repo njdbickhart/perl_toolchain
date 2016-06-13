@@ -34,7 +34,7 @@ while(my $line = <$IN>){
 	
 	print {$OUT} "$segs[1]\t$segs[2]\t$segs[4]\t$gc\n";
 }
-close $IN:
+close $IN;
 close $OUT;
 
 exit;
