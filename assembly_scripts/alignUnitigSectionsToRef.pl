@@ -2,6 +2,7 @@
 # This script subsections fastq entries, aligns them to a reference genome and attempts to identify consensus assembly regions
 # Update - 9/14/2015:	Modified program to print out statistics on assembled segments at the end prior to printout.
 # Update - 9/15/2015:	Added fasta support
+# Update - 6/23/2016:	Changed alignment merger segs algorithm
 
 use strict;
 use Getopt::Std;
@@ -188,6 +189,18 @@ sub produceOutput{
 			$prevcstart = $map->start;
 			$prevcend = $map->end;
 			push(@qualities, $map->quality);
+		}elsif($map->chr() eq $prevchr && ($self->getOverlapDist($prevcstart, $prevcend, $map->start, $map->end) < -20000)){
+			# Map range is 20 kb apart! Splitting this into a separate entry
+			if($prevustart != 200000000 && $prevcstart != 200000000){
+				push(@outlines, [$self->origname, $prevustart, $prevuend, $prevchr, $prevcstart, $prevcend, join(";", @qualities)]);
+			}
+			@qualities = ();
+			push(@qualities, $map->quality);
+			$prevchr = $map->chr();
+			$prevustart = $map->ustart;
+			$prevuend = $map->uend;
+			$prevcstart = $map->start;
+			$prevcend = $map->end;
 		}else{
 			$prevuend = $map->uend;
 			$prevcend = $map->end;
@@ -199,6 +212,14 @@ sub produceOutput{
 	$self->printLongestChrAligns(\@outlines);
 	
 	return @outlines;
+}
+
+sub getOverlapDist{
+	my ($self, $s1, $e1, $s2, $e2) = @_;
+	my $soonest = ($e1 >= $e2)? $e2 : $e1;
+	my $latest = ($s1 >= $s2)? $s1 : $s2;
+	
+	return $soonest - $latest;
 }
 
 sub printLongestChrAligns{
