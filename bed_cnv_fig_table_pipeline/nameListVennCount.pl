@@ -79,7 +79,7 @@ foreach my $k (keys(%store)){
 		push(@{$printout{$group}}, $k);
 	}elsif($stdoutflag && exists($stdoutgroup{$group})){
 		# We just want the output from this list, so print the data now
-		print STDERR "$k\n";
+		print STDOUT "$k\n";
 		$stdoutcount++;
 	}
 	$counter{$group} += 1;
