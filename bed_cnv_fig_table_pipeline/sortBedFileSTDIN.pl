@@ -12,8 +12,8 @@ while(my $line = <STDIN>){
 }
 
 foreach my $chr (sort {
-			my ($x) = $a =~ /chr(.+)/;
-			my ($y) = $b =~ /chr(.+)/;
+			my ($c1, $x) = $a =~ /(chr)*(.+)/;
+			my ($c2, $y) = $b =~ /(chr)*(.+)/;
 			if($x eq "X"){
 				$x = 500;
 			}elsif($x eq "Y"){
