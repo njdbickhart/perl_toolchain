@@ -46,6 +46,7 @@ while(my $line = <$IN>){
 			$data{$gapname} = [$gaplen, $closecoords, $closelen, 0, 1, "toolarge"];
 		}else{
 			$data{$gapname} = [$gaplen, $closecoords, $closelen, 0, 0, ""];
+			push(@{$gapCoords{$segs[5]}}, [$tstart, $tend]);
 			print {$BED} "$segs[5]\t$tstart\t$tend\t$gapname\n";
 		}
 		$tested++;
@@ -67,16 +68,20 @@ foreach my $gaps (sort {$a cmp $b} keys(%{$depth})){
 		$type = "GAP";
 		my @cons = split(/;/, $datarray[5]);
 		my $first = $cons[0]; my $current = $cons[0];
-		for(my $x = 1; $x < scalar(@cons); $x++){
-			if($cons[$x] = $current + 1){
-				$current = $cons[$x];
-			}else{
-				if($first == $current){
-					push(@carray, $first);
+		if($cons[0] eq "toolarge"){
+			$type = "Large";
+		}else{
+			for(my $x = 1; $x < scalar(@cons); $x++){
+				if($cons[$x] = $current + 1){
+					$current = $cons[$x];
 				}else{
-					push(@carray, "$first-$current");
+					if($first == $current){
+						push(@carray, $first);
+					}else{
+						push(@carray, "$first-$current");
+					}
+					$first = $cons[$x]; $current = $cons[$x];
 				}
-				$first = $cons[$x]; $current = $cons[$x];
 			}
 		}
 	}
