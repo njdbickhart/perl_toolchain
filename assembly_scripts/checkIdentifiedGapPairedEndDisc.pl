@@ -47,7 +47,7 @@ while(my $line = <$IN>){
 		}else{
 			$data{$gapname} = [$gaplen, $closecoords, $closelen, 0, 0, ""];
 			push(@{$gapCoords{$segs[5]}}, [$tstart, $tend]);
-			print {$BED} "$segs[5]\t$tstart\t$tend\t$gapname\n";
+			print {$BED} "$segs[5]\t$tstart\t$tend\n";
 		}
 		$tested++;
 	}else{
@@ -115,7 +115,7 @@ sub process_bam_depth_file{
 		# Check to see if we need to update the gapname
 		if($segs[0] ne $lastchr || $segs[1] > $lastend){
 			# Find out which gap region we're dealing with		
-			foreach my $row ($gapCoords->{$segs[0]}){
+			foreach my $row (@{$gapCoords->{$segs[0]}}){
 				if($segs[1] <= $row->[1] && $segs[1] >= $row->[0]){
 					$gapname = "$segs[0]:" . $row->[0] . "-" . $row->[1];
 					$lastchr = $segs[0];
