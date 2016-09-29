@@ -2,9 +2,10 @@
 # This script processes the tab delimited output from identifyFilledGaps.pl, a bam file containing paired end read alignments to the target assembly
 # and generates a score for gap filling based on soft clipping and discordant read mappings
 # OUTPUT:
-# Class gap_name gap_length close_coordinates close_len read_num softclipped_bases oae_reads
+# Class gap_name gap_length close_coordinates close_len read_num covered_bases regions_of_conflict
 #
 # class can be: "FullClose, CrypticMis, GAP, Unknown"
+# version 2: used a depth instead of a raw alignment check strategy
 
 use strict;
 use Getopt::Std;
@@ -25,9 +26,11 @@ unless( -s $opts{'t'} && -s "$opts{t}.bai"){
 }
 
 my $tested = 0; my $skipped = 0;
+my %data; # {gap name} ->[gap_len, close_coordinates, close_len, sumdepth, conflict_bases, conflict_str]
+my %gapCoords; # {close chr} -> [] -> [start, end]
 
 open(my $IN, "< $opts{g}") || die "Could not open gap closure file!\n";
-open(my $OUT, "> $opts{o}");
+open(my $BED, "> temp.bed");
 while(my $line = <$IN>){
 	chomp $line;
 	my @segs = split(/\t/, $line);
@@ -39,44 +42,50 @@ while(my $line = <$IN>){
 		my ($tstart, $tend) = get_coords($aligns1, $aligns2, $aligne1, $aligne2);
 		my $closecoords = "$segs[5]:$tstart-$tend";
 		my $closelen = $tend - $tstart;
-		my $type = "Unknown";
-		if($segs[8] == -1){
-			# We have a very close overlap closure
-			# We need to test this to see if its correct or a misassembly			
-			# padding start and end coords with 5 bases to check around alignment
-			my ($reads, $sclip, $oae) = process_bam_file($opts{'t'}, $segs[5], $tstart - 5, $tend + 5);
-			if($reads > 1 && ($sclip > 1 || $oae > 1)){
-				$type = "CrypticMis";
-			}elsif($reads > 1){
-				$type = "FullClose";
-			}
-			
-			print {$OUT} "$type\t$gapname\t$gaplen\t$closecoords\t$closelen\t$reads\t$sclip\t$oae\n";
-		}elsif(abs($segs[8] - $segs[4]) > 100000){
-			# The difference in closure size is too great here. There's an alignment issue or misassembly
-			print {$OUT} "$type\t$gapname\t$gaplen\t$closecoords\t$closelen\t-1\t-1\t-1\n";
-		}elsif($segs[8] != $segs[10]){
-			# It's pretty clear, this is an unclosed gap!
-			$type = "GAP";
-			print {$OUT} "$type\t$gapname\t$gaplen\t$closecoords\t$closelen\t-1\t-1\t-1\n";
-		}else{
-			# This should handle all reasonable length closure events
-			my ($reads, $sclip, $oae) = process_bam_file($opts{'t'}, $segs[5], $tstart, $tend);
-			if($reads > 1 && ($sclip > 1 || $oae > 1)){
-				$type = "CrypticMis";
-			}elsif($reads > 1){
-				$type = "FullClose";
-			}
-			print {$OUT} "$type\t$gapname\t$gaplen\t$closecoords\t$closelen\t$reads\t$sclip\t$oae\n";
-		}
+		$data{$gapname} = [$gaplen, $closecoords, $closelen, 0, 0, ""];
+		print {$BED} "$segs[5]\t$tstart\t$tend\t$gapname\n";
 		$tested++;
 	}else{
 		$skipped++;
 	}
-	if($tested % 100 == 0){
-		print ".";
+}
+close $BED;
+close $IN;
+
+my $depth = process_bam_depth_file($opts{'t'}, "temp.bed", \%data, \%gapCoords, 5);
+
+open(my $OUT, "> $opts{o}");
+foreach my $gaps (sort {$a cmp $b} keys(%{$depth})){
+	my @datarray = @{$depth->{$gaps}};
+	my @carray; 
+	my $type = "FullClose";
+	if($datarray[4] > 0){
+		$type = "GAP";
+		my @cons = split(/;/, $datarray[5]);
+		my $first = $cons[0]; my $current = $cons[0];
+		for(my $x = 1; $x < scalar(@cons); $x++){
+			if($cons[$x] = $current + 1){
+				$current = $cons[$x];
+			}else{
+				if($first == $current){
+					push(@carray, $first);
+				}else{
+					push(@carray, "$first-$current");
+				}
+				$first = $cons[$x]; $current = $cons[$x];
+			}
+		}
+	}
+	my $cstr = join(";",@carray);
+	print {$OUT} "$type\t$gaps\t$datarray[0]\t$datarray[1]\t$datarray[2]\t$datarray[3]\t$datarray[4]";
+	if($datarray[4] > 0){
+		print {$OUT} "\t$cstr\n";
+	}else{
+		print {$OUT} "\n";
 	}
 }
+close $OUT;
+
 print "\n";
 close $IN;
 close $OUT;
@@ -85,10 +94,43 @@ print "Tested: $tested\n";
 print "Skipped: $skipped\n";
 		
 exit;
+# {gap name} ->[gap_len, close_coordinates, close_len, sumdepth, conflict_bases, conflict_str]
+sub process_bam_depth_file{
+	my ($bam, $bed, $data, $gapCoords, $mincov) = @_;
+	open(my $BAM, "samtools depth -b $bed -q 30 -Q 40 $bam |");
+	my $lastchr = "NA"; my $lastend = 0; my $gapname; 
+	while(my $line = <$BAM>){
+		chomp $line; 
+		my @segs = split(/\t/, $line);
+		
+		# Check to see if we need to update the gapname
+		if($segs[0] ne $lastchr || $segs[1] > $lastend){
+			# Find out which gap region we're dealing with		
+			foreach my $row ($gapCoords->{$segs[0]}){
+				if($segs[1] <= $row->[1] && $segs[1] >= $row->[0]){
+					$gapname = "$segs[0]:" . $row->[0] . "-" . $row->[1];
+					$lastchr = $segs[0];
+					$lastend = $row->[1];
+					last;
+				}
+			}
+		}
+		
+		if($segs[2] < $mincov){
+			$data->{$gapname}->[4] += 1;
+			$data->{$gapname}->[5] .= "$segs[1];";
+		}
+		
+		$data->{$gapname}->[3] += $segs[2];
+	}
+	close $BAM;
+	return $data;
+}
+
 sub process_bam_file{
 	my ($bam, $chr, $start, $end) = @_;
 	my $reads = 0; my $sclip = 0; my $oae = 0;
-	open(my $BAM, "samtools view $bam $chr:$start-$end |");
+	open(my $BAM, "samtools depth -r $chr:$start-$end -q 30 -Q 40 $bam  |");
 	while(my $sam = <$BAM>){
 		chomp $sam;
 		my @segs = split(/\t/, $sam);
