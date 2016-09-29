@@ -46,8 +46,8 @@ while(my $line = <$IN>){
 			$data{$gapname} = [$gaplen, $closecoords, $closelen, 0, 1, "toolarge"];
 		}else{
 			$data{$gapname} = [$gaplen, $closecoords, $closelen, 0, 0, ""];
-			push(@{$gapCoords{$segs[5]}}, [$tstart, $tend]);
-			print {$BED} "$segs[5]\t$tstart\t$tend\n";
+			push(@{$gapCoords{$segs[5]}}, [$tstart, $tend, $gapname]);
+			print {$BED} "$segs[5]\t$tstart\t$tend\t$gapname\n";
 		}
 		$tested++;
 	}else{
@@ -106,7 +106,7 @@ exit;
 # {gap name} ->[gap_len, close_coordinates, close_len, sumdepth, conflict_bases, conflict_str]
 sub process_bam_depth_file{
 	my ($bam, $bed, $data, $gapCoords, $mincov) = @_;
-	open(my $BAM, "samtools depth -b $bed -q 30 -Q 40 $bam |");
+	open(my $BAM, "samtools depth -a -b $bed -q 30 -Q 40 $bam |");
 	my $lastchr = "NA"; my $lastend = 0; my $gapname; 
 	while(my $line = <$BAM>){
 		chomp $line; 
@@ -117,7 +117,7 @@ sub process_bam_depth_file{
 			# Find out which gap region we're dealing with		
 			foreach my $row (@{$gapCoords->{$segs[0]}}){
 				if($segs[1] <= $row->[1] && $segs[1] >= $row->[0]){
-					$gapname = "$segs[0]:" . $row->[0] . "-" . $row->[1];
+					$gapname = $row->[2];
 					$lastchr = $segs[0];
 					$lastend = $row->[1];
 					last;
