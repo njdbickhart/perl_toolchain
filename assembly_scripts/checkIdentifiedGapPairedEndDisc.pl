@@ -44,7 +44,7 @@ while(my $line = <$IN>){
 			# We have a very close overlap closure
 			# We need to test this to see if its correct or a misassembly			
 			# padding start and end coords with 5 bases to check around alignment
-			my ($reads, $sclip, $oae) = process_bam_file($segs[5], $tstart - 5, $tend + 5);
+			my ($reads, $sclip, $oae) = process_bam_file($opts{'t'}, $segs[5], $tstart - 5, $tend + 5);
 			if($reads > 1 && ($sclip > 1 || $oae > 1)){
 				$type = "CrypticMis";
 			}elsif($reads > 1){
@@ -61,7 +61,7 @@ while(my $line = <$IN>){
 			print {$OUT} "$type\t$gapname\t$gaplen\t$closecoords\t$closelen\t-1\t-1\t-1\n";
 		}else{
 			# This should handle all reasonable length closure events
-			my ($reads, $sclip, $oae) = process_bam_file($segs[5], $tstart, $tend);
+			my ($reads, $sclip, $oae) = process_bam_file($opts{'t'}, $segs[5], $tstart, $tend);
 			if($reads > 1 && ($sclip > 1 || $oae > 1)){
 				$type = "CrypticMis";
 			}elsif($reads > 1){
