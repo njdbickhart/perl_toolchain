@@ -62,7 +62,7 @@ foreach my $gaps (sort {$a cmp $b} keys(%{$depth})){
 	if($datarray[4] > 0){
 		$type = "GAP";
 		my @cons = split(/;/, $datarray[5]);
-		my $first = $cons[0]; $current = $cons[0];
+		my $first = $cons[0]; my $current = $cons[0];
 		for(my $x = 1; $x < scalar(@cons); $x++){
 			if($cons[$x] = $current + 1){
 				$current = $cons[$x];
