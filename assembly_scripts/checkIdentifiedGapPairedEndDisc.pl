@@ -42,8 +42,12 @@ while(my $line = <$IN>){
 		my ($tstart, $tend) = get_coords($aligns1, $aligns2, $aligne1, $aligne2);
 		my $closecoords = "$segs[5]:$tstart-$tend";
 		my $closelen = $tend - $tstart;
-		$data{$gapname} = [$gaplen, $closecoords, $closelen, 0, 0, ""];
-		print {$BED} "$segs[5]\t$tstart\t$tend\t$gapname\n";
+		if($closelen > 100000){
+			$data{$gapname} = [$gaplen, $closecoords, $closelen, 0, 1, "toolarge"];
+		}else{
+			$data{$gapname} = [$gaplen, $closecoords, $closelen, 0, 0, ""];
+			print {$BED} "$segs[5]\t$tstart\t$tend\t$gapname\n";
+		}
 		$tested++;
 	}else{
 		$skipped++;
