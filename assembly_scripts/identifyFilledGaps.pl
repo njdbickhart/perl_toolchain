@@ -3,6 +3,7 @@
 # The first reference genome is used as a comparison point for gap identification, and then reads are generated around gap sequence
 # output format:
 #	Type	OChr	OGapstart	OGapend	OGaplen	SChr	Salign1coords	Salign2coords	Sfilledbases	SpercFilled	SObsGapSize
+# 10/2/2016: updated logic to identify faulty alignments that were not properly mapped
 
 use strict;
 use Getopt::Std;
@@ -42,6 +43,7 @@ my $pairSam = "temp.gap.sam";
 
 # Storage -> {readname = Ochr_Ostart_Oend} -> [gaps]
 has 'Storage' => (is => 'rw', isa => 'HashRef[Any]', default => sub{{}});
+has 'Unmapped' => (is => 'rw', isa => 'HashRef[Str]', default => sub {{}}, handles => {'isunmapped' => 'exists',}); 
 has ['Oref', 'Sref', 'GetMask', 'Java'] => (is => 'ro', isa => 'Str', required => 1);
 
 sub GenerateOutput{
@@ -54,7 +56,12 @@ sub GenerateOutput{
 		if(!$store->{$k}->has_Type){
 			$store->{$k}->DetermineType;
 		}
-		$store->{$k}->DetermineFilled($self->Sref);
+		if($self->isunmapped($k)){
+			# New logic: set to unmapped if it fit prior criteria
+			$store->{$k}->Type("Unmapped");
+		}else{
+			$store->{$k}->DetermineFilled($self->Sref);
+		}
 		
 		my $str = $store->{$k}->GetOutString();
 		print {$OUT} $str;
@@ -77,6 +84,7 @@ sub ProcessGapFQ{
 	# Read sam file and process
 	open(my $SAM, "< $pairSam") || die "Could not open sam file!\n";
 	my $store = $self->Storage;
+	my $unmap = $self->Unmapped;
 	while(my $line = <$SAM>){
 		if($line =~ /^@/){next;}
 		
@@ -92,11 +100,20 @@ sub ProcessGapFQ{
 		
 		if(($segs[1] & 2048) == 2048){
 			# split read alignment
+			# updated logic: split read alignments indicate far too much ambiguity
+			$unmap->{$segs[0]} = 1;
 			next;
 		}elsif($segs[2] eq "*"){
 			# unmapped chr
+			# updated logic: add this to the unmapped list as well
+			$unmap->{$segs[0]} = 1;
 			next;
 		}else{
+			my $cigarsoft = $self->_determineCigarSoftClip($segs[5]);
+			if($cigarsoft > 50){
+				# updated logic: > 10% of read length in soft clipping is unmapped
+				$unmap->{$segs[0]} = 1;
+			}
 			my $aend = $self->_determineCigarLen($segs[3], $segs[5]);
 			if($store->{$segs[0]}->has_SChr && $store->{$segs[0]}->SChr ne $segs[2]){
 				$store->{$segs[0]}->Type("Trans");
@@ -119,9 +136,19 @@ sub ProcessGapFQ{
 		}
 	}
 	$self->Storage($store);
+	$self->Unmapped($unmap);
 	
 	print STDERR "Finished sam file processing!\n";
 	close $SAM;
+}
+sub _determineCigarSoftClip{
+	my ($self, $cigar) = @_;
+	my $soft = 0;
+	while($cigar =~ m/(\d+)[SH]/g){
+		my $count = $1;
+		$soft += $count;
+	}
+	return $soft;
 }
 
 sub _determineCigarLen{
