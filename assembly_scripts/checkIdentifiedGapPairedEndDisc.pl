@@ -6,16 +6,18 @@
 #
 # class can be: "FullClose, CrypticMis, GAP, Unknown"
 # version 2: used a depth instead of a raw alignment check strategy
+# version 3: checks original reference to see if "fullclosed" regions are present, contiguously in that reference (eliminate false alignments to repeats)
+
 
 use strict;
 use Getopt::Std;
 
 my %opts;
-my $usage = "perl $0 -g <tab delimited gap closure file> -t <target reference bam file> -o <output tab file summary>\n";
+my $usage = "perl $0 -g <tab delimited gap closure file> -t <target reference bam file> -f <target reference fasta> -v <original reference fasta> -o <output tab file summary>\n";
 
-getopt('gto', \%opts);
+getopt('gtofv', \%opts);
 
-unless(defined($opts{'g'}) && defined($opts{'t'}) && defined($opts{'o'})){
+unless(defined($opts{'g'}) && defined($opts{'t'}) && defined($opts{'o'}) && defined($opts{'f'}) && defined($opts{'v'})){
 	print $usage;
 	exit;
 }
@@ -43,7 +45,11 @@ while(my $line = <$IN>){
 		my $closecoords = "$segs[5]:$tstart-$tend";
 		my $closelen = $tend - $tstart;
 		if($closelen > 100000){
+			# The gap flanking sequences were too far apart
 			$data{$gapname} = [$gaplen, $closecoords, $closelen, 0, 1, "toolarge"];
+		}elsif($segs[8] < $segs[10]){
+			#there were ambiguous bases in the region between the reads
+			$data{$gapname} = [$gaplen, $closecoords, $closelen, 0, 1, "gap"];
 		}else{
 			$data{$gapname} = [$gaplen, $closecoords, $closelen, 0, 0, ""];
 			push(@{$gapCoords{$segs[5]}}, [$tstart, $tend, $gapname]);
@@ -59,7 +65,9 @@ close $IN;
 
 my $depth = process_bam_depth_file($opts{'t'}, "temp.bed", \%data, \%gapCoords, 5);
 
+my @dataToPrint;
 open(my $OUT, "> $opts{o}");
+my $fasta = "temp.check.fa";
 foreach my $gaps (sort {$a cmp $b} keys(%{$depth})){
 	my @datarray = @{$depth->{$gaps}};
 	my @carray; 
@@ -70,6 +78,8 @@ foreach my $gaps (sort {$a cmp $b} keys(%{$depth})){
 		my $first = $cons[0]; my $current = $cons[0];
 		if($cons[0] eq "toolarge"){
 			$type = "Large";
+		}elsif($cons[0] eq "gap"){
+			$type = "Gap";
 		}else{
 			for(my $x = 1; $x < scalar(@cons); $x++){
 				if($cons[$x] = $current + 1){
@@ -86,13 +96,45 @@ foreach my $gaps (sort {$a cmp $b} keys(%{$depth})){
 		}
 	}
 	my $cstr = join(";",@carray);
-	print {$OUT} "$type\t$gaps\t$datarray[0]\t$datarray[1]\t$datarray[2]\t$datarray[3]\t$datarray[4]";
-	if($datarray[4] > 0){
-		print {$OUT} "\t$cstr\n";
-	}else{
-		print {$OUT} "\n";
+	# Check if it's fullclose and grep out fasta for checking if it is larger than 36 bases to close the gap
+	if($type eq "FullClose" && $datarray[2] > 36){
+		system("samtools faidx $opts{f} $datarray[1] > $fasta");
+	}
+	push(@dataToPrint, [$type, $gaps, @datarray]);
+	#print {$OUT} "$type\t$gaps\t$datarray[0]\t$datarray[1]\t$datarray[2]\t$datarray[3]\t$datarray[4]";
+	#if($datarray[4] > 0){
+	#	print {$OUT} "\t$cstr\n";
+	#}else{
+	#	print {$OUT} "\n";
+	#}
+}
+
+# Do BWA alignment and check to see if this is a fully mapped region
+open(my $BWA, "bwa mem $opts{v} $fasta |");
+my %fullclose; # if there is hard clipping, or the read doesn't align, then the gap stands closed
+while(my $line = <$BWA>){
+	chomp $line;
+	if($line =~ /^@/){next;}
+	my @segs = split(/\t/, $line);
+	if($segs[1] & 2064 == 2064){
+		$fullclose{$segs[0]} = 1;
+	}
+	if($segs[5] =~ /(\d+)H/){
+		$fullclose{$segs[0]} = 1;
+	}
+	if($segs[2] eq "*"){
+		$fullclose{$segs[0]} = 1;
 	}
 }
+close $BWA;
+
+foreach my $row (@dataToPrint){
+	if($row->[0] eq "FullClose" && !exists($fullclose{$row->[3]})){
+		$row->[0] = "Ambiguous";
+	}
+	print {$OUT} join("\t", @{$row}) . "\n";
+}
+
 close $OUT;
 
 print "\n";
