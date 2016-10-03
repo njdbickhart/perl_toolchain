@@ -33,6 +33,7 @@ exit;
 BEGIN{
 package GapFinder;
 use Mouse;
+use MouseX::NativeTraits;
 use namespace::autoclean;
 
 my $gapBed = "temp.gap.bed";
@@ -43,7 +44,7 @@ my $pairSam = "temp.gap.sam";
 
 # Storage -> {readname = Ochr_Ostart_Oend} -> [gaps]
 has 'Storage' => (is => 'rw', isa => 'HashRef[Any]', default => sub{{}});
-has 'Unmapped' => (is => 'rw', isa => 'HashRef[Str]', default => sub {{}}, handles => {'isunmapped' => 'exists',}); 
+has 'Unmapped' => (traits => ['Hash'], is => 'rw', isa => 'HashRef[Str]', default => sub {{}}, handles => {'isunmapped' => 'exists',}); 
 has ['Oref', 'Sref', 'GetMask', 'Java'] => (is => 'ro', isa => 'Str', required => 1);
 
 sub GenerateOutput{

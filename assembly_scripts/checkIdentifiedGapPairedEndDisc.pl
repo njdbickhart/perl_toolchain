@@ -129,7 +129,7 @@ while(my $line = <$BWA>){
 close $BWA;
 
 foreach my $row (@dataToPrint){
-	if($row->[0] eq "FullClose" && !exists($fullclose{$row->[3]})){
+	if($row->[0] eq "FullClose" && !exists($fullclose{$row->[3]}) && $row->[4] > 36){
 		$row->[0] = "Ambiguous";
 	}
 	print {$OUT} join("\t", @{$row}) . "\n";
