@@ -6,7 +6,7 @@
 #
 # class can be: "FullClose, CrypticMis, GAP, Unknown"
 # version 2: used a depth instead of a raw alignment check strategy
-# version 3: checks original reference to see if "fullclosed" regions are present, contiguously in that reference (eliminate false alignments to repeats)
+# version 3-4: checks original reference to see if "fullclosed" regions are present at the same regions as the original gap(eliminate false alignments to repeats)
 
 
 use strict;
@@ -30,6 +30,7 @@ unless( -s $opts{'t'} && -s "$opts{t}.bai"){
 my $tested = 0; my $skipped = 0;
 my %data; # {gap name} ->[gap_len, close_coordinates, close_len, sumdepth, conflict_bases, conflict_str]
 my %gapCoords; # {close chr} -> [] -> [start, end]
+my %origCoords;
 
 open(my $IN, "< $opts{g}") || die "Could not open gap closure file!\n";
 open(my $BED, "> temp.bed");
@@ -44,6 +45,7 @@ while(my $line = <$IN>){
 		my ($tstart, $tend) = get_coords($aligns1, $aligns2, $aligne1, $aligne2);
 		my $closecoords = "$segs[5]:$tstart-$tend";
 		my $closelen = $tend - $tstart;
+		$origCoords{$closecoords} = "$segs[1]_$segs[2]_$segs[3]";
 		if($closelen > 100000){
 			# The gap flanking sequences were too far apart
 			$data{$gapname} = [$gaplen, $closecoords, $closelen, 0, 1, "toolarge"];
@@ -82,7 +84,7 @@ foreach my $gaps (sort {$a cmp $b} keys(%{$depth})){
 			$type = "Gap";
 		}else{
 			for(my $x = 1; $x < scalar(@cons); $x++){
-				if($cons[$x] = $current + 1){
+				if($cons[$x] == $current + 1){
 					$current = $cons[$x];
 				}else{
 					if($first == $current){
@@ -98,7 +100,7 @@ foreach my $gaps (sort {$a cmp $b} keys(%{$depth})){
 	my $cstr = join(";",@carray);
 	# Check if it's fullclose and grep out fasta for checking if it is larger than 36 bases to close the gap
 	if($type eq "FullClose" && $datarray[2] > 36){
-		system("samtools faidx $opts{f} $datarray[1] > $fasta");
+		system("samtools faidx $opts{f} $datarray[1] >> $fasta");
 	}
 	push(@dataToPrint, [$type, $gaps, @datarray]);
 	#print {$OUT} "$type\t$gaps\t$datarray[0]\t$datarray[1]\t$datarray[2]\t$datarray[3]\t$datarray[4]";
@@ -111,16 +113,19 @@ foreach my $gaps (sort {$a cmp $b} keys(%{$depth})){
 
 # Do BWA alignment and check to see if this is a fully mapped region
 open(my $BWA, "bwa mem $opts{v} $fasta |");
-my %fullclose; # if there is hard clipping, or the read doesn't align, then the gap stands closed
+my %fullclose; # if the gap is in the proper region, or the read doesn't align, then the gap stands closed
 while(my $line = <$BWA>){
 	chomp $line;
 	if($line =~ /^@/){next;}
 	my @segs = split(/\t/, $line);
-	if($segs[1] & 2064 == 2064){
-		$fullclose{$segs[0]} = 1;
-	}
-	if($segs[5] =~ /(\d+)H/){
-		$fullclose{$segs[0]} = 1;
+	# Checking to see if we're in the same balpark here
+	if(exists($origCoords{$segs[0]})){
+		my @checksegs = split(/_/, $origCoords{$segs[0]});
+		unless($segs[2] eq $checksegs[0] && ($segs[3] <= $checksegs[2] && $segs[3] >= $checksegs[1])){
+			$fullclose{$segs[0]} = 1;
+		}
+	}else{
+		print STDERR "Error identifying gap region: $segs[0]!\n";
 	}
 	if($segs[2] eq "*"){
 		$fullclose{$segs[0]} = 1;
