@@ -99,12 +99,14 @@ sub ProcessGapFQ{
 			next;
 		}
 		
-		if(($segs[1] & 2048) == 2048){
+		#if(($segs[1] & 2048) == 2048){
 			# split read alignment
 			# updated logic: split read alignments indicate far too much ambiguity
-			$unmap->{$segs[0]} = 1;
-			next;
-		}elsif($segs[2] eq "*"){
+		#	$unmap->{$segs[0]} = 1;
+		#	next;
+		#}els
+		
+		if($segs[2] eq "*"){
 			# unmapped chr
 			# updated logic: add this to the unmapped list as well
 			$unmap->{$segs[0]} = 1;
