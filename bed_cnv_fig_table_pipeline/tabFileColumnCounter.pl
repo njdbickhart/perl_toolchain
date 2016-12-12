@@ -3,6 +3,7 @@
 # It only works on columns that have a limited range of possible entries (like enumerated types)
 # 6/12/2015: added a STDIN functionality
 # 4/18/2016: added feature to skip empty lines
+# 12/12/2016: made it so that all single space characters are delimited by default
 
 use strict;
 use Getopt::Std;
@@ -137,7 +138,7 @@ sub readFile{
 			}
 		}
 		
-		my @segs = split(/\t/, $line);
+		my @segs = split(/\s{1}/, $line);
 		if(scalar(@segs) < $col + 1){next;}
 		$hash{$segs[$col]} += 1;
 	}
