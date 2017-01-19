@@ -1,30 +1,41 @@
 #!/usr/bin/perl
 # This script takes an annotated bcf file (with index) and converts it into a tab delimited format for easy referencing
+# Added vcf option to bypass bcf processing and allowed output of all variant lines
 
 use strict;
 use Getopt::Std;
 
-my $usage = "perl $0 -b <indexed bcf file> (-g <grep string> || -r <region in ucsc format>) -o <output file>\n";
+my $usage = "perl $0 (-b <indexed bcf file> || -v <vcf file>) (-a <all> || -g <grep string> || -r <region in ucsc format>) -o <output file>\n";
 my %opts;
-getopt('brog', \%opts);
+getopt('brogv', \%opts);
 
-unless(defined($opts{'b'}) && (defined($opts{'g'}) || defined($opts{'r'})) && defined($opts{'o'})){
+unless((defined($opts{'b'}) || defined($opts{'v'})) && (defined($opts{'a'}) || defined($opts{'g'}) || defined($opts{'r'})) && defined($opts{'o'})){
 	print $usage;
+	exit;
+}
+
+if(defined($opts{'v'}) && defined($opts{'r'})){
+	print "Error! Select indexed bcf for this option!\n$usage";
 	exit;
 }
 
 open(OUT, "> $opts{o}");
 
+my $vcf = defined($opts{'b'})? $opts{'b'} : $opts{'v'};
+
 # Retrieve header sequence
-my @header = getHeaderInfo($opts{'b'});
+my @header = getHeaderInfo($vcf);
 print OUT join("\t", @header) . "\n";
 
 #CHROM  POS     ID      REF     ALT    QUAL     FILTER  INFO    FORMAT  BIBR02.1        BIBR03.1        
 my $in;
+my $cmd = defined($opts{'b'})? "bcftools view $opts{b}" : "cat $opts{v}";
 if(defined($opts{'r'})){
 	open($in, "bcftools view $opts{b} $opts{r} |") || die "Could not open bcftools output!\n $usage";
 }elsif(defined($opts{'g'})){
-	open($in, "bcftools view $opts{b} | grep \'$opts{g}\' |") || die "Could not open bcftools output!\n $usage";
+	open($in, "$cmd | grep \'$opts{g}\' |") || die "Could not open bcftools output!\n $usage";
+}else{
+	open($in, "$cmd |") || die "Could not open file output!\n $usage";
 }
 
 #my @header;
@@ -96,9 +107,11 @@ sub processVCFLine{
 
 sub getHeaderInfo{
 	my ($file) = @_;
-	open(IN, "bcftools view $file | grep \'#CHROM\' |");
+	my $IN; 
+	my $cmd = ($file =~ /.+.vcf$/)? "cat $file | grep \'#CHROM\' |" : "bcftools view $file | grep \'#CHROM\' |";
+	open($IN, "$cmd");
 	my @header;
-	while(my $line = <IN>){
+	while(my $line = <$IN>){
 		chomp $line;
 		my @segs = split(/\s+/, $line);
 		push(@header, ("CHR", $segs[1], $segs[3], $segs[4], $segs[5], "TYPE", "MUTATION", "PRIORITY", "GENE", "AA"));
@@ -107,6 +120,6 @@ sub getHeaderInfo{
 		#print OUT "CHR\t$segs[1]\t$segs[3]\t$segs[4]\t$segs[5]\tTYPE\tMUTATION\tPRIORITY\tGENE\tAA\t";
 		#print OUT join("\t", @segs[9 .. $#segs]) . "\n";
 	}
-	close IN;
+	close $IN;
 	return @header;
 }
