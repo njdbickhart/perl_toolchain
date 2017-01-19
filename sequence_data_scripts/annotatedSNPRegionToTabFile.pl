@@ -71,7 +71,13 @@ sub processVCFLine{
 
 	#EFF=SYNONYMOUS_CODING(LOW|SILENT|acG/acA|T334|581|PRLR|protein_coding|CODING|ENSBTAT00000014437|9|1)
 	#ANN=A|stop_gained|HIGH|TBC1D4|ENSBTAG00000005760|transcript|ENSBTAT00000066234|protein_coding|20/23|c.3217A>T|p.Arg1073*|3217/4499|3217/3915|1073/1304||,A|stop_gained|HIGH|TBC1D4|ENSBTAG00000005760|transcript|ENSBTAT00000007574|protein_coding|18/21|c.3211A>T|p.Arg1071*|3211/4493|3211/3909|1071/1302||,A|stop_gained|HIGH|TBC1D4|ENSBTAG00000005760|transcript|ENSBTAT00000065132|protein_coding|15/17|c.2473A>T|p.Arg825*|2473/2913|2473/2748|825/915||WARNING_TRANSCRIPT_NO_STOP_CODON;LOF=(TBC1D4|ENSBTAG00000005760|3|1.00)
-	my @annosegs = split(/,/, $infosegs[-1]);
+	my $effindex = 0;
+	for(my $x = 0; $x < scalar(@infosegs); $x++){
+		if($infosegs[$x] =~ /^ANN=/){
+			$effindex = $x; last;
+		}
+	}
+	my @annosegs = split(/,/, $infosegs[$effindex]);
 	my @mutation;
 	my @priority;
 	my @gene;
