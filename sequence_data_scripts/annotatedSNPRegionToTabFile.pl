@@ -86,8 +86,8 @@ sub processVCFLine{
 	foreach my $a (@annosegs){
 		$a =~ s/ANN=//g;
 		#($m) = $a =~ /(.+)\(.*\)/;
-		my ($str) = $a =~ /.+\((.*)\)/;
-		my @effsegs = split(/\|/, $str);
+		#my ($str) = $a =~ /.+\((.*)\)/;
+		my @effsegs = split(/\|/, $a);
 		$m = $effsegs[1];
 		$p = $effsegs[2];
 		$g = $effsegs[3];
