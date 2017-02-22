@@ -8,14 +8,38 @@ use namespace::autoclean;
 has ['workDir', 'scriptDir', 'outDir', 'errDir'] => (is => 'ro', isa => 'Str', required => 1);
 has 'modules' => (is => 'rw', isa => 'ArrayRef[Any]', handle => 'has_module');
 has ['nodes', 'tasks', 'mem', 'time'] => (is => 'rw', isa => 'Any', default => -1);
+has 'jobIds' => (is => 'rw', isa => 'ArrayRef[Any]', handle => 'has_jobs');
+
+sub checkJobs{
+	my ($self) = @_;
+	
+	my @jobIds = @{$self->jobIds};
+	my @incomplete;
+	foreach my $j (@jobIds){
+		my $output = `squeue -j $j`;
+		if($output =~ /slurm_load_jobs error:/){
+			push(@incomplete, $j);
+		}
+	}
+	$self->jobIds(@incomplete);
+	if(scalar(@incomplete) > 0){
+		return 0;
+	}else{
+		return 1;
+	}
+}
+			
 
 sub queueJobs{
 	my ($self) = @_;
 	
 	my @scripts = `ls $self->scriptDir`;
+	my @jobIds;
 	foreach my $s (@scripts){
-		system("sbatch $s");
+		my $jid = `sbatch $s`;
+		push(@jobIds, $jid);
 	}
+	$self->jobIds(\@jobIds);
 }
 
 sub createArrayCmd{
