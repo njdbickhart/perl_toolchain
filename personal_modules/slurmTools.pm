@@ -6,9 +6,9 @@ use Mouse;
 use namespace::autoclean;
 
 has ['workDir', 'scriptDir', 'outDir', 'errDir'] => (is => 'ro', isa => 'Str', required => 1);
-has 'modules' => (is => 'rw', isa => 'ArrayRef[Any]', handle => 'has_module');
+has 'modules' => (is => 'rw', isa => 'ArrayRef[Any]', predicate => 'has_module');
 has ['nodes', 'tasks', 'mem', 'time'] => (is => 'rw', isa => 'Any', default => -1);
-has 'jobIds' => (is => 'rw', isa => 'ArrayRef[Any]', handle => 'has_jobs');
+has 'jobIds' => (is => 'rw', isa => 'ArrayRef[Any]', predicate => 'has_jobs');
 
 sub checkJobs{
 	my ($self) = @_;
@@ -43,14 +43,14 @@ sub queueJobs{
 }
 
 sub createArrayCmd{
-	my ($Self, $carrayref, $sbase) = @_;
+	my ($self, $carrayref, $sbase) = @_;
 	# Requires an array ref of premade cmds for a single script
 	$self->_generateFolders;
 	if(!defined($sbase)){
 		$sbase = "script_";
 	}
 	
-	my $head = $self->_generateHeader($sname);
+	my $head = $self->_generateHeader($sbase);
 	
 	foreach my $cmd (@{$carrayref}){
 		$head .= "echo $cmd\ntime $cmd\n\n";
@@ -58,7 +58,7 @@ sub createArrayCmd{
 	$head .= "wait\n";
 	
 	my $sFolder = $self->scriptDir;
-	open(my $OUT, "> $sFolder/$sname") || die "Could not create script!\n";
+	open(my $OUT, "> $sFolder/$sbase") || die "Could not create script!\n";
 	print {$OUT} $head;
 	close $OUT;
 }
@@ -95,12 +95,16 @@ sub _generateSHash{
 	
 	my $h = 0;
 	
-	foreach my $c (unpack("C*", $cmd)){
-		my $high = $c & 0xf8000000;
-		$h = $h << 5;
-		$h = $h ^ ($high >> 27);
-		$h = $h ^ $c;
+	my @random_set;
+	my %seen;
+
+	for (1..5) {
+    		my $candidate = int rand(1185);
+   		redo if $seen{$candidate}++;
+    		push @random_set, $candidate;
 	}
+
+	$h = join("", @random_set);
 	
 	return $h;
 }

@@ -11,7 +11,7 @@ my @modules = ("samtools/1.3-20-gd49c73b", "bwa/0.7.13-r1126");
 my $usage = "perl $0 -b <base outfolder name> -t <input tab sequence files> -f <input reference fasta file>\n";
 getopt('btf', \%opts);
 
-unless(defined($opts{'b'}) && defined($opts{'o'}) && defined($opts{'t'})){
+unless(defined($opts{'b'}) && defined($opts{'f'}) && defined($opts{'t'})){
 	print $usage;
 	exit;
 }
@@ -20,7 +20,7 @@ my %slurmWorkers; # each sample gets its own worker
 mkdir $opts{'b'} || print "$!\n";
 my $scriptCounter = 0;
 
-open(my $IN, "< opts{t}") || die "Could not open input tab file!\n";
+open(my $IN, "< $opts{t}") || die "Could not open input tab file!\n";
 while(my $line = <$IN>){
 	chomp $line; 
 	my @segs = split(/\t/, $line);
@@ -33,7 +33,7 @@ while(my $line = <$IN>){
 			'modules' => \@modules,
 			'nodes' => 1,
 			'tasks' => 5,
-			'mem' => 7000);
+			'mem' => 9000);
 	}
 	
 	my $bname = basename($segs[0]);
