@@ -5,6 +5,7 @@ use strict;
 use File::Basename;
 use Getopt::Std;
 use slurmTools;
+use Cwd;
 
 my %opts;
 my @modules = ("samtools/1.3-20-gd49c73b", "bwa/0.7.13-r1126");
@@ -19,6 +20,7 @@ unless(defined($opts{'b'}) && defined($opts{'f'}) && defined($opts{'t'})){
 my %slurmWorkers; # each sample gets its own worker
 mkdir $opts{'b'} || print "$!\n";
 my $scriptCounter = 0;
+my $currentDir = cwd();
 
 open(my $IN, "< $opts{t}") || die "Could not open input tab file!\n";
 while(my $line = <$IN>){
@@ -26,10 +28,10 @@ while(my $line = <$IN>){
 	my @segs = split(/\t/, $line);
 	
 	if(! exists($slurmWorkers{$segs[-1]})){
-		$slurmWorkers{$segs[-1]} = slurmTools->new('workDir' => "$opts{b}/$segs[-1]", 
-			'scriptDir' => "$opts{b}/$segs[-1]/scripts", 
-			'outDir' => "$opts{b}/$segs[-1]/outLog", 
-			'errDir' => "$opts{b}/$segs[-1]/errLog",
+		$slurmWorkers{$segs[-1]} = slurmTools->new('workDir' => "$currentDir/$opts{b}/$segs[-1]", 
+			'scriptDir' => "$currentDir/$opts{b}/$segs[-1]/scripts", 
+			'outDir' => "$currentDir/$opts{b}/$segs[-1]/outLog", 
+			'errDir' => "$currentDir/$opts{b}/$segs[-1]/errLog",
 			'modules' => \@modules,
 			'nodes' => 1,
 			'tasks' => 5,
