@@ -17,7 +17,7 @@ has 'counter' => (traits => ['Hash'], is => 'rw', isa => 'HashRef[Any]', default
 		'Get' => 'get',
 		'Set' => 'set',
 	});
-has 'data' => (traits => ['Array'], is => 'rw', isa => 'ArrayRef[Num]', default => sub{{}},
+has 'data' => (traits => ['Array'], is => 'rw', isa => 'ArrayRef[Num]', default => sub{[]},
 	handles => {
 		'addValue' => 'push',
 		'sortOptions' => 'sort',
