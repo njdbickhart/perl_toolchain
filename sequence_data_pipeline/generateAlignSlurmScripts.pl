@@ -21,6 +21,13 @@ my %slurmWorkers; # each sample gets its own worker
 mkdir $opts{'b'} || print "$!\n";
 my $scriptCounter = 0;
 my $currentDir = cwd();
+my $fasta = $opts{'f'};
+
+if( -e "$currentDir/$opts{f}"){
+	$fasta = "$currentDir/$opts{f}";
+}else{
+	print STDERR "Error locating fasta file in current directory! Please check file path!\n$usage\n";
+}
 
 open(my $IN, "< $opts{t}") || die "Could not open input tab file!\n";
 while(my $line = <$IN>){
@@ -43,7 +50,7 @@ while(my $line = <$IN>){
 	my @bsegs = split(/\./, $bname);
 	my $uname = $bsegs[0];
 	
-	my $cmd = "bwa mem -t 5 $opts{f} $segs[0] $segs[1] | samtools view -S -b - | samtools sort -m 2G -o $opts{b}/$segs[-1]/$uname.sorted.bam -T $opts{b}/$segs[-1]/$uname -";
+	my $cmd = "bwa mem -t 5 $fasta $segs[0] $segs[1] | samtools view -S -b - | samtools sort -m 2G -o $uname.sorted.bam -T $uname -";
 	
 	$slurmWorkers{$segs[-1]}->createGenericCmd($cmd);
 	$scriptCounter++;
