@@ -6,7 +6,7 @@ use namespace::autoclean;
 # Required attributes
 has 'colnum' => (is => 'ro', isa => 'Int', required => 1);
 has 'mkdwn' => (is => 'ro', isa => 'Bool', required => 1);
-has 'numeric' => (is => 'ro', isa => 'Bool', default => 0);
+has 'numeric' => (is => 'rw', isa => 'Bool', default => 0);
 
 has 'output' => (is => 'rw', isa => 'Str', predicate => 'has_output');
 has 'ignore' => (is => 'rw', isa => 'Str', predicate => 'has_ignore');
