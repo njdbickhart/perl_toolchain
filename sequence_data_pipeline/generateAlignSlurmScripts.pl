@@ -33,8 +33,9 @@ while(my $line = <$IN>){
 			'outDir' => "$currentDir/$opts{b}/$segs[-1]/outLog", 
 			'errDir' => "$currentDir/$opts{b}/$segs[-1]/errLog",
 			'modules' => \@modules,
+			'useTime' => 0,
 			'nodes' => 1,
-			'tasks' => 5,
+			'tasks' => 7,
 			'mem' => 9000);
 	}
 	
@@ -42,7 +43,7 @@ while(my $line = <$IN>){
 	my @bsegs = split(/\./, $bname);
 	my $uname = $bsegs[0];
 	
-	my $cmd = "bwa mem -t 4 $opts{f} $segs[0] $segs[1] | samtools view -S -b - | samtools sort -m 2G -o $opts{b}/$segs[-1]/$uname.sorted.bam -T $opts{b}/$segs[-1]/$uname -";
+	my $cmd = "bwa mem -t 5 $opts{f} $segs[0] $segs[1] | samtools view -S -b - | samtools sort -m 2G -o $opts{b}/$segs[-1]/$uname.sorted.bam -T $opts{b}/$segs[-1]/$uname -";
 	
 	$slurmWorkers{$segs[-1]}->createGenericCmd($cmd);
 	$scriptCounter++;

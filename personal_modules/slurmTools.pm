@@ -6,6 +6,7 @@ use Mouse;
 use namespace::autoclean;
 
 has ['workDir', 'scriptDir', 'outDir', 'errDir'] => (is => 'ro', isa => 'Str', required => 1);
+has 'useTime' => (is => 'rw', isa => 'Bool', default => 1);
 has 'modules' => (is => 'rw', isa => 'ArrayRef[Any]', predicate => 'has_module');
 has ['nodes', 'tasks', 'mem', 'time'] => (is => 'rw', isa => 'Any', default => -1);
 has 'jobIds' => (is => 'rw', isa => 'ArrayRef[Any]', predicate => 'has_jobs');
@@ -49,11 +50,12 @@ sub createArrayCmd{
 	if(!defined($sbase)){
 		$sbase = "script_";
 	}
+	my $time = ($self->useTime)? "time " : "";
 	
 	my $head = $self->_generateHeader($sbase);
 	
 	foreach my $cmd (@{$carrayref}){
-		$head .= "echo $cmd\ntime $cmd\n\n";
+		$head .= "echo $cmd\n$time$cmd\n\n";
 	}
 	$head .= "wait\n";
 	
@@ -71,9 +73,10 @@ sub createGenericCmd{
 		my $hash = $self->_generateSHash($cmd);
 		$sname = "script_$hash.sh";
 	}
+	my $time = ($self->useTime)? "time " : "";
 	
 	my $head = $self->_generateHeader($sname);
-	$head .= "echo $cmd\ntime $cmd\nwait\n";
+	$head .= "echo $cmd\n$time$cmd\nwait\n";
 	
 	my $sFolder = $self->scriptDir;
 	open(my $OUT, "> $sFolder/$sname") || die "Could not create script!\n";
