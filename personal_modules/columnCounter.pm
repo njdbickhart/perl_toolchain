@@ -107,7 +107,7 @@ sub _numericCount{
 	my %values;
 	
 	my %numHash = %{$self->counter};
-	my @data = @{$self->sortOptions};
+	my @data = $self->sortOptions;
 	my $sum = $self->sum;
 	my $sqr = $self->sumSquares;
 	my $ct = scalar(@data);

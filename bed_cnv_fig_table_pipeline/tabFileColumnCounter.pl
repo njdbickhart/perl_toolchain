@@ -24,7 +24,7 @@ OPTIONAL:
 \n";
 
 my %opts;
-getopt('fcoex', \%opts);
+getopt('fcoe', \%opts);
 
 unless(defined($opts{'f'}) && defined($opts{'c'})){
 	print $usage;
