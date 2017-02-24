@@ -4,7 +4,7 @@ use FileHandle;
 use namespace::autoclean;
 
 # Required attributes
-has 'colnum' => (is => 'ro', isa => 'Int', required => 1);
+has 'colnum' => (is => 'rw', isa => 'Int', required => 1);
 has 'mkdwn' => (is => 'ro', isa => 'Bool', required => 1);
 has 'numeric' => (is => 'rw', isa => 'Bool', default => 0);
 
@@ -37,8 +37,9 @@ sub readFile{
 		$fh->open("< $file") || die "[ColumnCounter] Could not open input file: $file\n";
 	}
 	my $col = $self->colnum;
-	my %hash;
-	my @data;
+	# Just in case we're reusing previously made counter tables!
+	my %hash = %{$self->counter};
+	my @data = @{$self->data};
 	my $sum = 0; my $ss = 0;
 	my $com;
 	if($self->has_ignore){

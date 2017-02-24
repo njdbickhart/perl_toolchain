@@ -9,24 +9,32 @@ has ['workDir', 'scriptDir', 'outDir', 'errDir'] => (is => 'ro', isa => 'Str', r
 has 'useTime' => (is => 'rw', isa => 'Bool', default => 1);
 has 'modules' => (is => 'rw', isa => 'ArrayRef[Any]', predicate => 'has_module');
 has ['nodes', 'tasks', 'mem', 'time'] => (is => 'rw', isa => 'Any', default => -1);
+has 'scripts' => (is => 'rw', isa => 'ArrayRef[Any]', default => sub{[]}, handles => {
+		'add_script' => 'push',
+	});
 has 'jobIds' => (is => 'rw', isa => 'ArrayRef[Any]', predicate => 'has_jobs');
+has 'dependencies' => (is => 'rw', isa => 'ArrayRef[Any]', predicate => 'has_dep');
 
 sub checkJobs{
 	my ($self) = @_;
 	
-	my @jobIds = @{$self->jobIds};
-	my @incomplete;
-	foreach my $j (@jobIds){
-		my $output = `squeue -j $j`;
-		if($output =~ /slurm_load_jobs error:/){
-			push(@incomplete, $j);
+	if($self->has_jobs){
+		my @jobIds = @{$self->jobIds};
+		my @incomplete;
+		foreach my $j (@jobIds){
+			my $output = `squeue -j $j`;
+			if($output =~ /slurm_load_jobs error:/){
+				push(@incomplete, $j);
+			}
 		}
-	}
-	$self->jobIds(@incomplete);
-	if(scalar(@incomplete) > 0){
-		return 0;
+		$self->jobIds(@incomplete);
+		if(scalar(@incomplete) > 0){
+			return 0;
+		}else{
+			return 1;
+		}
 	}else{
-		return 1;
+		return -1;
 	}
 }
 			
@@ -34,7 +42,7 @@ sub checkJobs{
 sub queueJobs{
 	my ($self) = @_;
 	
-	my @scripts = `ls $self->scriptDir`;
+	my @scripts = @{$self->scripts};
 	my @jobIds;
 	foreach my $s (@scripts){
 		my $jid = `sbatch $s`;
@@ -50,12 +58,14 @@ sub createArrayCmd{
 	if(!defined($sbase)){
 		$sbase = "script_";
 	}
+	my $hash = $self->_generateSHash($cmd);
+	$sbase .= "$hash.sh";
 	my $time = ($self->useTime)? "time " : "";
 	
 	my $head = $self->_generateHeader($sbase);
 	
 	foreach my $cmd (@{$carrayref}){
-		$head .= "echo $cmd\n$time$cmd\n\n";
+		$head .= "echo \"$cmd\"\n$time$cmd\n\n";
 	}
 	$head .= "wait\n";
 	
@@ -63,6 +73,7 @@ sub createArrayCmd{
 	open(my $OUT, "> $sFolder/$sbase") || die "Could not create script!\n";
 	print {$OUT} $head;
 	close $OUT;
+	$self->add_script("$sFolder/$sbase");
 }
 
 sub createGenericCmd{
@@ -72,16 +83,20 @@ sub createGenericCmd{
 	if(!defined($sname)){
 		my $hash = $self->_generateSHash($cmd);
 		$sname = "script_$hash.sh";
+	}else{
+		my $hash = $self->_generateSHash($cmd);
+		$sname = "$sname\_$hash.sh";
 	}
 	my $time = ($self->useTime)? "time " : "";
 	
 	my $head = $self->_generateHeader($sname);
-	$head .= "echo $cmd\n$time$cmd\nwait\n";
+	$head .= "echo \"$cmd\"\n$time$cmd\nwait\n";
 	
 	my $sFolder = $self->scriptDir;
 	open(my $OUT, "> $sFolder/$sname") || die "Could not create script!\n";
 	print {$OUT} $head;
 	close $OUT;
+	$self->add_script("$sFolder/$sname");
 }
 
 sub _generateFolders{
@@ -130,6 +145,17 @@ sub _generateHeader{
 	if($self->time != -1){
 		$str .= "$tag --time=" . $self->time . "\n";
 	}
+	if($self->has_dep){
+		my @dependencies = @{$self->dependencies};
+		chomp(@dependencies);
+		my $depStr = "afterok";
+		foreach my $d (@dependencies){
+			$depStr .= ":$d";
+		}
+		
+		$str .= "$tag --dependency=$depStr\n";
+	}
+		
 	$str .= "$tag --output=" . $self->outDir . "/$sname\_%j.out\n$tag --error=" . $self->errDir . "/$sname\_%j.err\n$tag --workdir=" . $self->workDir . "\n\n";
 	
 	$str .= "cd " . $self->workDir . "\n\n";
