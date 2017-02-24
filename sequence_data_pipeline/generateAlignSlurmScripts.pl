@@ -45,7 +45,7 @@ while(my $line = <$IN>){
 			'useTime' => 0,
 			'nodes' => 1,
 			'tasks' => 7,
-			'mem' => 9000);
+			'mem' => 12000);
 	}
 	
 	my $bname = basename($segs[0]);
@@ -82,7 +82,7 @@ if(defined($opts{'m'})){
 			'useTime' => 0,
 			'nodes' => 1,
 			'tasks' => 7,
-			'mem' => 5000);
+			'mem' => 9000);
 			
 		my @bams = @{$slurmBams{$samples}};
 		my $bwhitespace = join(" ", @bams);
