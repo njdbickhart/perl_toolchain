@@ -3,6 +3,7 @@
 
 use strict;
 use File::Basename;
+use Sub::Identify;
 use Getopt::Std;
 use slurmTools;
 use Cwd;

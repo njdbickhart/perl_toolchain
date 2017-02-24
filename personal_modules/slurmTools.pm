@@ -9,7 +9,7 @@ has ['workDir', 'scriptDir', 'outDir', 'errDir'] => (is => 'ro', isa => 'Str', r
 has 'useTime' => (is => 'rw', isa => 'Bool', default => 1);
 has 'modules' => (is => 'rw', isa => 'ArrayRef[Any]', predicate => 'has_module');
 has ['nodes', 'tasks', 'mem', 'time'] => (is => 'rw', isa => 'Any', default => -1);
-has 'scripts' => (is => 'rw', isa => 'ArrayRef[Any]', default => sub{[]}, handles => {
+has 'scripts' => (traits => ['Array'], is => 'rw', isa => 'ArrayRef[Any]', default => sub{[]}, handles => {
 		'add_script' => 'push',
 	});
 has 'jobIds' => (is => 'rw', isa => 'ArrayRef[Any]', predicate => 'has_jobs');
@@ -46,7 +46,9 @@ sub queueJobs{
 	my @jobIds;
 	foreach my $s (@scripts){
 		my $jid = `sbatch $s`;
-		push(@jobIds, $jid);
+		chomp $jid;
+		my ($job) = $jid =~ /(\d+)/;
+		push(@jobIds, $job);
 	}
 	$self->jobIds(\@jobIds);
 }
@@ -58,7 +60,7 @@ sub createArrayCmd{
 	if(!defined($sbase)){
 		$sbase = "script_";
 	}
-	my $hash = $self->_generateSHash($cmd);
+	my $hash = $self->_generateSHash($sbase);
 	$sbase .= "$hash.sh";
 	my $time = ($self->useTime)? "time " : "";
 	
@@ -148,7 +150,7 @@ sub _generateHeader{
 	if($self->has_dep){
 		my @dependencies = @{$self->dependencies};
 		chomp(@dependencies);
-		my $depStr = "afterok";
+		my $depStr = "afterany";
 		foreach my $d (@dependencies){
 			$depStr .= ":$d";
 		}
