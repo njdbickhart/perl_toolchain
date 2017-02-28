@@ -287,7 +287,7 @@ has 'entryTab' => (traits => ['Array'], is => 'rw', isa => 'ArrayRef[Str]', defa
 		'numEntry' => 'count',
 		'allEntry' => 'elements',
 	});
-has 'valueTab' => (traits => ['Array'], is => 'rw', isa => 'ArrayRef[Int]', default => sub{[]},
+has 'valueTab' => (traits => ['Array'], is => 'rw', isa => 'ArrayRef[Num]', default => sub{[]},
 	handles => {
 		'addValue' => 'push',
 		'getValue' => 'get',
