@@ -51,7 +51,9 @@ while(my $line = <$IN>){
 	
 	my $bname = basename($segs[0]);
 	my @bsegs = split(/\./, $bname);
-	my $uname = $bsegs[0];
+	# Adding a hash of file paths to ensure that the file names are unique
+	my $uHash = urlHash($segs[0]);
+	my $uname = "$bsegs[0].$uHash";
 	
 	my $cmd = "bwa mem -t 5 -R '\@RG\tID:$segs[-2]\tSM:$segs[-1]\tLIB:$segs[-2]' $fasta $segs[0] $segs[1] | samtools view -S -b - | samtools sort -m 2G -o $uname.sorted.bam -T $uname -";
 	push(@{$slurmBams{$segs[-1]}}, "$uname.sorted.bam");
@@ -103,3 +105,13 @@ if(defined($opts{'m'})){
 }
 
 exit;
+
+sub urlHash{
+	my ($url) = @_;
+	$url =~ s/\///g; # Remove redundant path separators
+	my $hash = 0;
+	foreach my $h (split //, $url) {
+		$hash = $hash*33 + ord($h);
+	}
+	return $hash;
+}
