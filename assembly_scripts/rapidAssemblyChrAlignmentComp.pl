@@ -28,22 +28,23 @@ my $sampFasta = "$opts{j}.sampling.fa";
 open(my $IN, "module load samtools; samtools faidx $opts{c} $opts{j} |");
 open(my $OUT, "> $sampFasta");
 my $head = <$IN>;
-my $bp = 0; 
+my $bp = 0; my $totalbp = 0; 
 while(my $line = <$IN>){
 	chomp $line;
 	if($bp >= $sampling){
 		$bp = 0;
-		print {$OUT} ">sample.$opts{j}.$bp\n$line\n";
+		print {$OUT} ">sample.$opts{j}.$totalbp\n$line\n";
 	}
 	$bp += length($line);
+	$totalbp += length($line);
 }
 close $IN;
 close $OUT;
 
 # Extract chromosome to compare
 my $newASMComp = "$opts{m}.chr.comp.fa";
-system("module load samtools; samtools faidx $opts{n} $opts{m}");
-
+system("module load samtools; samtools faidx $opts{n} $opts{m} > $newASMComp");
+system("module load bwa; bwa index $newASMComp");
 # align and order sampling fasta
 my @data; # [chr, start, end, orient, origpos, origend]
 my $start = 0;
@@ -53,6 +54,7 @@ while(my $line = <$IN>){
 	chomp $line;
 	my @segs = split(/\t/, $line);
 	if($segs[1] & 2048){next;}
+	if($segs[2] eq "*"){next;}
 	
 	my @rnamesegs = split(/\./, $segs[0]);
 	
@@ -64,7 +66,7 @@ while(my $line = <$IN>){
 		my $compRow = $data[-1];
 		my $orient = ($segs[1] & 16)? "-" : "+";
 		if($compRow->[0] eq $segs[2] 
-			&& ($compRow->[1] > $segs[3] - ($sampling * 1.5) && $compRow->[1] < $segs[3] + ($sampling * 1.5))
+			&& ($compRow->[2] > $segs[3] - ($sampling * 3) && $compRow->[2] < $segs[3] + ($sampling * 3))
 			&& $compRow->[3] eq $orient){
 			
 			$data[-1]->[2] = $segs[3];
@@ -78,7 +80,8 @@ close $IN;
 
 open(my $OUT, "> $opts{o}");
 foreach my $row (@data){
-	print {$OUT} $row->[0] . "\t" . $row->[1] . "\t" . $row->[2] . "\t" . $row->[3] . "\t$opts{m}\t" . $row->[4] . "\t" . $row->[5] . "\n";
+	my $len = $row->[5] - $row->[4];
+	print {$OUT} $row->[0] . "\t" . $row->[1] . "\t" . $row->[2] . "\t" . $row->[3] . "\t$opts{m}\t" . $row->[4] . "\t" . $row->[5] . "\t$len\n";
 }
 close $OUT;
 
