@@ -107,11 +107,13 @@ if(defined($opts{'m'})){
 exit;
 
 sub urlHash{
-	my ($url) = @_;
-	$url =~ s/\///g; # Remove redundant path separators
-	my $hash = 0;
-	foreach my $h (split //, $url) {
-		$hash = $hash*33 + ord($h);
-	}
-	return $hash;
+        my @alphabet = (('a'..'z'), 0..9);
+        my %collection;
+        for (1..30) {
+                my $len = rand(11) + 10;
+                my $key = join '', map {$alphabet[rand(@alphabet)]} 1..$len;
+                $collection{$key} ? redo : $collection{$key}++;
+        }
+        my @sets = keys(%collection);
+        return $sets[0];
 }
