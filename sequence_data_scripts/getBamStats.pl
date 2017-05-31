@@ -8,7 +8,7 @@ use FileHandle;
 use bamTools;
 
 my %opts;
-my $usage = "perl $0 -g <genome size> -b <bam files (comma separated)> [-o <output tab file [otherwise, STDOUT]>]
+my $usage = "perl $0 -b <bam files (comma separated)> || -l <ls of bam files> [-o <output tab file [otherwise, STDOUT]>]
 REQUIRED:
 	-b	Input bam files to check (multiple bams can be input if entered as comma delimited values (no spaces!))
 	
@@ -20,11 +20,11 @@ if(scalar(@ARGV) == 0 || $ARGV[0] eq '-h'){
 	exit;
 }
 
-getopt('bo', \%opts);
+getopt('bol', \%opts);
 
 
 
-unless(defined($opts{'b'})){
+unless(defined($opts{'b'}) || defined($opts{'l'})){
 	print "Missing mandatory arguments!\n";
 	print $usage;
 	exit;
@@ -41,14 +41,27 @@ if(defined($opts{'o'})){
 my $reader = SamFileReader->new();
 my $totalCov = 0;
 my $bamnum = scalar(split(/,/, $opts{'b'}));
+
+my @bams;
+if(defined($opts{'b'})){
+	@bams = split(/,/, $opts{'b'});
+}elsif(defined($opts{'l'})){
+	@bams = `ls $opts{l}`;
+	if(scalar(@bams) < 1){
+		print STDERR "Error finding bam files from the following LS command: $opts{l}!\n";
+		exit;
+	}
+}
 print STDERR "Determining raw x coverage from $bamnum bams...\n";
-print $fh "BamName\tRawXCov\tMapXCov\tAvgRawChrcov\tAvgMapChrcov\n";
-foreach my $b (split(/,/, $opts{'b'})){
+print $fh "BamName\tTotalReads\tMappedReads\tUnmappedReads\tRawXCov\tMapXCov\tAvgRawChrcov\tAvgMapChrcov\n";
+foreach my $b (@bams){
 	$reader->prepSam($b);
+	my ($mappedReads, $unmappedReads) = $reader->getReads();
 	my ($rawcov, $mappedcov, $chrcov) = $reader->getXCov();
 	$totalCov += $rawcov;
 	my ($rawavg, $mappedavg) = averageChrCov($chrcov);
-	print $fh "$b\t$rawcov\t$mappedcov\t$rawavg\t$mappedavg\n";
+	my $totalReads = $mappedReads + $unmappedReads;
+	print $fh "$b\t$totalReads\t$mappedReads\t$unmappedReads\t$rawcov\t$mappedcov\t$rawavg\t$mappedavg\n";
 }
 
 if(defined($opts{'o'})){	
