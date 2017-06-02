@@ -22,3 +22,9 @@ if(defined($opts{'s'})){
 	open($IN, "samtools view $opts{b} |");
 }
 
+while(my $line = <$IN>){
+	chomp $line;
+	if($line =~ /^@/){next;}
+	
+	my @segs = split(/\t/, $line);
+	
