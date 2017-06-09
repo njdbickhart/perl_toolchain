@@ -28,3 +28,15 @@ while(my $line = <$IN>){
 	
 	my @segs = split(/\t/, $line);
 	
+}
+
+sub getAlignLen{
+	my ($cigar) = @_;
+	my $len = 0;
+	while($cigar =~ /(\d{1,6})(\D{1})/g){
+		if($2 =~ /[M=XDN]/){
+			$len += $1;
+		}
+	}
+	return $len;
+}
