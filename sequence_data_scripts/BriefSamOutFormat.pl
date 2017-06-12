@@ -27,7 +27,10 @@ while(my $line = <$IN>){
 	if($line =~ /^@/){next;}
 	
 	my @segs = split(/\t/, $line);
+	my $alnEnd = getAlignLen($segs[5]);
+	my $seqLen = length($segs[9]);
 	
+	print "$segs[0]\t$segs[1]\t$segs[2]\t$segs[3]\t$alnEnd\t$seqLen\t$segs[4]\n";
 }
 
 sub getAlignLen{
