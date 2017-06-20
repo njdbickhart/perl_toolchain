@@ -27,7 +27,7 @@ while(my $line = <$IN>){
 	if($line =~ /^@/){next;}
 	
 	my @segs = split(/\t/, $line);
-	my $alnEnd = getAlignLen($segs[5]);
+	my $alnEnd = getAlignLen($segs[5]) + $segs[3];
 	my $seqLen = length($segs[9]);
 	
 	print "$segs[0]\t$segs[1]\t$segs[2]\t$segs[3]\t$alnEnd\t$seqLen\t$segs[4]\n";
@@ -37,8 +37,10 @@ sub getAlignLen{
 	my ($cigar) = @_;
 	my $len = 0;
 	while($cigar =~ /(\d{1,6})(\D{1})/g){
-		if($2 =~ /[M=XDN]/){
-			$len += $1;
+		my $bp = $1;
+		my $code = $2;
+		if($code =~ /[M=XDN]/){
+			$len += $bp;
 		}
 	}
 	return $len;
