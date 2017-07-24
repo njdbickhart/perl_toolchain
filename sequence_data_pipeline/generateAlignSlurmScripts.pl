@@ -1,5 +1,8 @@
 #!/usr/bin/perl
 # This is a script designed to process a tab file with sequence data fastqs and produce slurm scripts
+# Modification to enable the use of input unaligned bam files for mapping
+# Input tab sequence files now follow this format:
+# 1. unmapped bam, 2. lib, 3. sample
 
 use strict;
 use File::Basename;
@@ -55,7 +58,7 @@ while(my $line = <$IN>){
 	my $uHash = urlHash($segs[0]);
 	my $uname = "$bsegs[0].$uHash";
 	
-	my $cmd = "bwa mem -t 8 -R '\@RG\tID:$segs[-2]\tSM:$segs[-1]\tLB:$segs[-2]' $fasta $segs[0] $segs[1] | samtools view -S -b - | samtools sort -m 2G -o $uname.sorted.bam -T $uname -";
+	my $cmd = "samtools fastq $segs[1] | bwa mem -p -t 8 -R '\@RG\tID:$segs[-2]\tSM:$segs[-1]\tLB:$segs[-2]' $fasta - | samtools view -S -b - | samtools sort -m 2G -o $uname.sorted.bam -T $uname -";
 	push(@{$slurmBams{$segs[-1]}}, "$uname.sorted.bam");
 	
 	$slurmWorkers{$segs[-1]}->createGenericCmd($cmd, "bwaAlign");
