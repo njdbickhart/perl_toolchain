@@ -58,7 +58,7 @@ while(my $line = <$IN>){
 	my $uHash = urlHash($segs[0]);
 	my $uname = "$bsegs[0].$uHash";
 	
-	my $cmd = "samtools fastq $segs[0] | bwa mem -t 8 -p -M -R '\@RG\tID:$segs[-2]\tSM:$segs[-1]\tLB:$segs[-2]' $fasta - | samtools sort -m 2G -o $uname.sorted.bam -T $uname -";
+	my $cmd = "samtools fastq $segs[0] | bwa mem -t 8 -p -M -R '\@RG\\tID:$segs[-2]\\tSM:$segs[-1]\\tLB:$segs[-2]' $fasta - | samtools sort -m 2G -o $uname.sorted.bam -T $uname -";
 	push(@{$slurmBams{$segs[-1]}}, "$uname.sorted.bam");
 	
 	$slurmWorkers{$segs[-1]}->createGenericCmd($cmd, "bwaAlign");
