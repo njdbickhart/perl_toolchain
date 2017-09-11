@@ -59,6 +59,14 @@ for(my $x = 0; $x < 37; $x++){
 	my ($chr, $pos) = split(/:/, $coords[$x]);
 	
 	my $curM = $markers[$markerIdx];
+	if($chr ne $curM->[0]){
+		for(my $y = 0; $y < scalar(@markers); $y++){
+			if($markers[$y]->[0] eq $chr){
+				$markerIdx = $y;
+				last;
+			}
+		}
+	}
 	if($chr eq $curM->[0] && $pos == $curM->[1]){
 		my ($avg5, $avg3) = getSumMapQ(\@rows, $x, $curM->[0], $curM->[1]);
 		$curM->[5] = $avg5;
@@ -88,7 +96,16 @@ while(my $line = <$IN>){
 		$curM->[5] = 0;
 		$curM->[6] = 0;
 		$markerIdx++;
+	}elsif($rows[35]->[0] ne $curM->[0]){
+		for(my $y = 0; $y < scalar(@markers); $y++){
+			# search for chr start location
+			if($markers[$y]->[0] eq $rows[35]->[0]){
+				$markerIdx = $y;
+				last;
+			}
+		}
 	}
+	
 }
 
 close $IN;
