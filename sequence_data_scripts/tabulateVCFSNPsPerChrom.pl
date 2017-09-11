@@ -35,7 +35,7 @@ while(my $line = <$IN>){
 }
 close $IN;
 
-open(my $OUT, "< $ARGV[1]");
+open(my $OUT, "> $ARGV[1]");
 my @chrs = sort{$a cmp $b} keys(%data);
 print {$OUT} "\t" . join("\t", @chrs) . "\n";
 foreach my $an (sort{ $a cmp $b} values(%atab)){
