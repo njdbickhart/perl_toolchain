@@ -23,7 +23,7 @@ while(my $line = <IN>){
 	if($segs[3] < 0.05 || $segs[3] > 0.51){
 		next;
 	}
-	my $snp = snpgms->new('position' => $segs[1], 'qs' => 10**(-1 * $segs[2] / 10), 'freq' => $segs[3], 'gmsup' => ($segs[4] / 100), 'gmsdown' => ($segs[5] / 100));
+	my $snp = snpgms->new('chr' => $segs[0], 'name' => $segs[6], 'position' => $segs[1], 'qs' => 10**(-1 * $segs[2] / 10), 'freq' => $segs[3], 'gmsup' => ($segs[4] / 100), 'gmsdown' => ($segs[5] / 100));
 	push(@snps, $snp);
 }
 
@@ -107,6 +107,7 @@ package snpgms;
 use Mouse;
 use namespace::autoclean;
 
+has ['chr', 'name'] => (is => 'ro', isa => 'Str', required => 1); 
 has 'position' => (is => 'ro', isa =>'Int', required => 1);
 has 'qs' => (is => 'ro', isa => 'Num', required => 1);
 has 'gmsup' => (is => 'ro', isa => 'Num', required => 1);
@@ -124,7 +125,7 @@ sub calcScore{
 
 sub printOut{
 	my ($self) = @_;
-	return $self->position() . "\t" . $self->qs() . "\t" . $self->freq() . "\t" . $self->gmsup() . "\t" . $self->gmsdown();
+	return $self->chr() . "\t" . $self->position() . "\t" . $self->name() . "\t" . $self->qs() . "\t" . $self->freq() . "\t" . $self->gmsup() . "\t" . $self->gmsdown();
 }
 
 sub _max{

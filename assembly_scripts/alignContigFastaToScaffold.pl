@@ -126,7 +126,7 @@ exit;
 
 sub getSamtoolsSeq{
     my ($fasta, $contig, $start, $end) = @_;
-    open(my $IN, "samtools $fasta $contig:$start-$end |");
+    open(my $IN, "samtools faidx $fasta $contig:$start-$end |");
     my $h =<$IN>;
     my $seq = '';
     while(my $line = <$IN>){

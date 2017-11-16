@@ -7,6 +7,7 @@
 # Output: base.segs <- identified chromosome segments
 # Output: base.conflicts <- conflicting segments
 # Output: base.stats <- general statistics
+# version 2: 11/16/2017	added conflict file generation
 
 use strict;
 use Getopt::Std;
@@ -22,6 +23,7 @@ unless(((defined($opts{'a'}) && defined($opts{'p'})) || defined($opts{'n'})) && 
 
 my $unmaps = 0; my $maps = 0; 
 my %aligns; # {ochr}->{opos} = [probe, chr, pos, orient]
+my %qcounts; # {chr}->{ochr} = count
 
 if(defined($opts{'a'})){
 open(my $IN, "module load bwa; bwa mem $opts{a} $opts{p} |") || die "Could not begin BWA alignments!\n";
@@ -42,7 +44,9 @@ while(my $line = <$IN>){
 	}else{
 		$maps++;
 	}
+	$segs[2] =~ s/[\|\;]/_/g; # Convert bad characters to underscores
 	my $orient = ($segs[1] & 16)? "-" : "+";
+	$qcounts{$segs[2]}->{$rnsegs[1]} += 1;
 	$aligns{$rnsegs[1]}->{$rnsegs[2]} = [$rnsegs[0], $segs[2], $segs[3], $orient];
 }
 close $IN;
@@ -53,6 +57,7 @@ close $IN;
 		my @segs = split(/\t/, $line);
 		$maps++;
 		my $orient = ($segs[2] > $segs[3])? "-" : "+";
+		$qcounts{$segs[12]}->{$segs[11]} += 1;
 		$aligns{$segs[11]}->{$segs[0]} = ["none", $segs[12], $segs[2], $orient];
 	}
 	close $IN;
@@ -61,6 +66,7 @@ close $IN;
 open(my $OUT, "> $opts{o}.tab");
 open(my $STATS, "> $opts{o}.stats");
 open(my $SEGS, "> $opts{o}.segs");
+open(my $CON, "> $opts{o}.conflicts");
 print {$STATS} "Mapping probes: $maps\tUnmapped probes: $unmaps\n";
 foreach my $chr (sort{$a <=> $b} keys(%aligns)){
 	my ($consensus, $values) = determineConsensus($aligns{$chr});
@@ -87,6 +93,29 @@ foreach my $chr (sort{$a <=> $b} keys(%aligns)){
 	}
 }
 close $OUT;
+close $STATS;
+close $SEGS;
+
+foreach my $chr (sort {scalar(@{keys(%{$qcounts{$b}})}) <=> scalar(@{keys(%{$qcounts{$a}})})} keys(%qcounts)){
+	# Sorted by number of alternative chromosome alignments
+	if(scalar(@{keys(%{$qcounts{$chr}})}) > 1){
+		my @multAligns;
+		foreach my $c (sort{$qcounts{$chr}->{$b} <=> $qcounts{$chr}->{$a}}keys(%{$qcounts{$chr}})){
+			# Sorted again by number of mapped segments
+			if($qcounts{$chr}->{$c} > 1){
+				push(@multAligns, $c);
+			}
+		}
+		if(scalar(@multAligns) > 1){
+			print {$CON} "$chr";
+			foreach my $c (@multAligns){
+				print {$CON} "\t$c:" . $qcounts{$chr}->{$c};
+			}
+			print "\n";
+		}
+	}
+}
+close $CON;
 
 exit;
 
