@@ -32,7 +32,7 @@ my @ratios = ("1.0", "0.95", "0.90", "0.85", "0.80", "0.75", "0.70", "0.65", "0.
 	"0.55", "0.50", "0.45", "0.40", "0.35", "0.30", "0.25", "0.20", "0.15", "0.10", "0.05");
 my @fhs; my %counts;
 foreach my $r (@ratios){
-	push(@fhs, FileHandle->new("| mash sketch -k 21 -s 10000 -r -m 2 -o downsampleSketch_$r -"));
+	push(@fhs, FileHandle->new("| mash sketch -k 21 -s 1000000 -r -m 2 -o downsampleSketch_$r -"));
 }
 
 # Start processing the files
