@@ -3,6 +3,7 @@
 # I'm going to start off easy at first
 # Adding the ability to print out groups to separate files for later retrieval
 # 5/19/2016:	v2	Added ability to print a specific grouping to STDOUT
+# 11/10/2017:	v3	
 
 use strict;
 
@@ -112,3 +113,8 @@ if($outputflag){
 }
 
 exit;
+
+sub DrawVennDiagram{
+	my ($filename, $data) = @_;
+	
+}
