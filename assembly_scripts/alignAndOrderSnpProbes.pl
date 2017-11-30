@@ -68,6 +68,38 @@ open(my $STATS, "> $opts{o}.stats");
 open(my $SEGS, "> $opts{o}.segs");
 open(my $CON, "> $opts{o}.conflicts");
 print {$STATS} "Mapping probes: $maps\tUnmapped probes: $unmaps\n";
+my %qconsensus; # {refchr}->{qchr} = refchr
+# Conflict mapping
+foreach my $chr (sort {scalar(keys(%{$qcounts{$b}})) <=> scalar(keys(%{$qcounts{$a}}))} keys(%qcounts)){
+	# Sorted by number of alternative chromosome alignments
+	if(scalar(keys(%{$qcounts{$chr}})) > 1){
+		my @multAligns;
+		my $totCount = 0;
+		foreach my $c (sort{$qcounts{$chr}->{$b} <=> $qcounts{$chr}->{$a}}keys(%{$qcounts{$chr}})){
+			# Sorted again by number of mapped segments
+			if($qcounts{$chr}->{$c} > 1){
+				push(@multAligns, $c);
+			}
+			$totCount += $qcounts{$chr}->{$c};
+		}
+		if($totCount == 0){$totCount = 1;}
+		$qconsensus{$multAligns[0]}->{$chr} = $multAligns[0];
+		if(scalar(@multAligns) > 1){
+			print {$CON} "$chr";
+			foreach my $c (@multAligns){
+				my $ratio = sprintf("%.3f", $qcounts{$chr}->{$c} / $totCount);
+				print {$CON} "\t$c:" . $qcounts{$chr}->{$c} . ":$ratio";
+			}
+			print {$CON} "\n";
+		}
+	}else{
+		my @k = keys(%{$qcounts{$chr}});
+		$qconsensus{$k[0]}->{$chr} = $k[0];
+	}
+}
+close $CON;
+
+
 foreach my $chr (sort{$a <=> $b} keys(%aligns)){
 	my ($consensus, $values) = determineConsensus($aligns{$chr});
 	print {$STATS} "Ref $chr consensus:";
@@ -76,7 +108,7 @@ foreach my $chr (sort{$a <=> $b} keys(%aligns)){
 	}
 	print {$STATS} "\n";
 
-	my ($refblocks, $qblocks) = identifyAndCondenseSegs($aligns{$chr}, $consensus->[0]);
+	my ($refblocks, $qblocks) = identifyAndCondenseSegs($aligns{$chr}, $consensus->[0], $qconsensus{$chr});
 	for(my $x = 0; $x < scalar(@{$refblocks}); $x++){
 		my $ref = $refblocks->[$x];
 		my $query = $qblocks->[$x];
@@ -96,31 +128,11 @@ close $OUT;
 close $STATS;
 close $SEGS;
 
-foreach my $chr (sort {scalar(@{keys(%{$qcounts{$b}})}) <=> scalar(@{keys(%{$qcounts{$a}})})} keys(%qcounts)){
-	# Sorted by number of alternative chromosome alignments
-	if(scalar(@{keys(%{$qcounts{$chr}})}) > 1){
-		my @multAligns;
-		foreach my $c (sort{$qcounts{$chr}->{$b} <=> $qcounts{$chr}->{$a}}keys(%{$qcounts{$chr}})){
-			# Sorted again by number of mapped segments
-			if($qcounts{$chr}->{$c} > 1){
-				push(@multAligns, $c);
-			}
-		}
-		if(scalar(@multAligns) > 1){
-			print {$CON} "$chr";
-			foreach my $c (@multAligns){
-				print {$CON} "\t$c:" . $qcounts{$chr}->{$c};
-			}
-			print "\n";
-		}
-	}
-}
-close $CON;
 
 exit;
 
 sub identifyAndCondenseSegs{
-	my ($hashref, $consensus) = @_;
+	my ($hashref, $consensus, $qconsensus) = @_;
 	# Logic: tolerate one deviation in consensus, otherwise condense region into a block
 	my @refblock; # [start, end]
 	my @queryblock; # [start, end, chr, testbit]
@@ -156,9 +168,10 @@ sub identifyAndCondenseSegs{
 		}else{
 			# passed the test bit for singleton deviations in consensus
 			if(($t1dist > 5 * $refDist && $t2dist > 5 * $refDist) ||
-				($test1->[1] ne $consensus && $test2->[1] ne $consensus)){
+				(($test1->[1] ne $consensus && $test2->[1] ne $consensus)
+				&& (!exists($qconsensus->{$test1->[1]}) && !exists($qconsensus->{$test2->[1]})))){
 				$segs++; # The conditional now knows to start a new segment
-			}elsif($t1dist > 5 * $refDist || $test1->[1] ne $consensus){
+			}elsif($t1dist > 5 * $refDist || ($test1->[1] ne $consensus && !exists($qconsensus->{$test1->[1]}))){
 				# We don't want singletons to screw up our segments
 				$skip = 1;
 			}
@@ -174,7 +187,7 @@ sub identifyAndCondenseSegs{
 		push(@refblock, [$buff[0]->[0], $buff[0]->[0]]);
 		push(@queryblock, [$buff[0]->[1]->[2], $buff[0]->[1]->[2], $buff[0]->[1]->[1]]);
 		if(scalar(@buff) > 1){
-			if($buff[1]->[1]->[2] eq $consensus){
+			if($buff[1]->[1]->[2] eq $consensus || exists($qconsensus->{$buff[1]->[1]->[2]})){
 				$refblock[0]->[1] = $buff[1]->[0];
 				$queryblock[0]->[1] = $buff[1]->[1]->[2];
 			}else{
@@ -205,3 +218,5 @@ sub determineConsensus{
 	my @values = map{$chrs{$_}} @consensus;
 	return \@consensus, \@values;
 }
+
+

@@ -65,6 +65,7 @@ foreach my $chr (keys(%TargetSites)){
 	foreach my $v (@{$TargetSites{$chr}}){
 		my $pos = $v->pos();
 		foreach my $o (@{$OvlpSites{$chr}->{$pos}}){
+			
 			$v->addVar($o);
 		}
 		
@@ -121,7 +122,7 @@ our $flanking = 150;
 
 has ['ID', 'InitSeq', 'FormatSeq', 'Chr', 'Ref', 'Alt'] => (is => 'rw', isa => 'Str');
 has ['pos', 'Qual', 'MAF', 'fivePrime', 'threePrime'] => (is => 'rw', isa => 'Num', default => 0);
-has 'OvlpVars' => (is => 'rw', isa => 'ArrayRef[varSite]', default => sub{[]},
+has 'OvlpVars' => (traits => ['Array'], is => 'rw', isa => 'ArrayRef[Any]', default => sub{[]},
 	handles => {
 		'addVar' => 'push',
 	});
@@ -138,9 +139,11 @@ sub ConvertFromVCF{
 	$self->pos($segs[1]); 
 	$self->Qual($segs[5]);
 	
-	my ($ac, $an) = $segs[7] =~ /.*AC=(.{1,4});.*AN=(.{1,4});.*/;
+	# AC=21;AN=250	
+	my ($ac, $an) = $segs[7] =~ /.*AC\=(.{1,4});AN\=(.{1,4});.*/;
 	my @acsegs = split(/,/, $ac);
-	
+	$an = (defined($an))? $an : 1;
+	$ac = (defined($ac))? $ac : 1;	
 	$self->MAF($acsegs[0] / $an);
 }
 	
