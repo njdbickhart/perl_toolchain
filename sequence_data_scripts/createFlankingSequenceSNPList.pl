@@ -48,9 +48,9 @@ foreach my $v (@vcfs){
 			}
 			
 			# overlap site definition
-			my $ostart = $j->[1] - ($flanking + 1);
+			my $ostart = $j->[1] - ($flanking);
 			my $oend = $j->[1] + ($flanking);
-			if($segs[1] <= $oend && $segs[1] >= $ostart){
+			if($segs[1] < $oend && $segs[1] > $ostart){
 				my $var = new varSite();
 				$var->ConvertFromVCF($line);
 				push(@{$OvlpSites{$j->[0]}->{$j->[1]}}, $var);
@@ -70,7 +70,8 @@ foreach my $chr (keys(%TargetSites)){
 		}
 		
 		# Extract flanking sequence from Fasta file for each targetSite
-		my $start = $pos - ($flanking + 1);
+		# NOTE: Samtools is zero-based, so even-digit nucleotide extracts result in odd-numbers
+		my $start = $pos - ($flanking );
 		my $end = $pos + $flanking;
 		if($start < 0){$start = 0;}
 		open(my $IN, "samtools faidx $opts{f} $chr:$start-$end |");
@@ -117,7 +118,7 @@ package varSite;
 use Mouse;
 use namespace::autoclean;
 
-our %iupac = ("AG" => "R", "CT" => "Y", "GC" => "S", "AT" => "W", "GT" => "K", "AC" => "M");
+our %iupac = ("AG" => "R", "CT" => "Y", "CG" => "S", "AT" => "W", "GT" => "K", "AC" => "M");
 our $flanking = 150;
 
 has ['ID', 'InitSeq', 'FormatSeq', 'Chr', 'Ref', 'Alt'] => (is => 'rw', isa => 'Str');
@@ -156,9 +157,9 @@ sub GenerateFormatSeq{
 	}else{
 		# Add IUPAC alterations and then generate formatted sequence
 		foreach my $vars (sort{$a->pos <=> $b->pos} @{$self->OvlpVars}){
-			my $strPos = ($vars->pos - $self->pos) + $flanking + 1;
+			my $strPos = ($vars->pos - $self->pos) + $flanking;
 			if($strPos < 0){
-				print "Error with relative position calculation!\n";
+				print "Error with relative position calculation: $strPos\t" . $vars->pos . "\t" . $self->pos . "\t" . $self->ID . "\n";
 			}
 			my $curRef = substr($initSeq, $strPos, 1); 
 			my $curAlt = $vars->Alt;
@@ -177,8 +178,10 @@ sub GenerateFormatSeq{
 
 sub _BracketSeq{
 	my ($self, $sequence, $ref, $alt) = @_;
-	my $format = $sequence;
-	substr($format, $flanking + 1, 1) = "[$ref\/$alt]";
+	my $five = substr($sequence, 0, $flanking);
+	my $three = substr($sequence, $flanking + 1, $flanking + 1);
+	my $format = $five . "[$ref\/$alt]" . $three;
+	#substr($format, $flanking + 1, 1) = "[$ref\/$alt]";
 	return $format;
 }
 
