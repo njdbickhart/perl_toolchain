@@ -77,8 +77,6 @@ if(defined($opts{'s'})){
 my %bcfJobids; # queued bcf jobs by called section ID
 my @vcfJobids; # queued vcf jobs
 foreach my $section (@sections){
-	chomp $line; 
-	my @segs = split(/\t/, $line);
 	
 	if(! exists($bcfWorkers{$section})){
 		$bcfWorkers{$section} = slurmTools->new('workDir' => "$currentDir/$opts{b}/bcf_files", 
@@ -102,7 +100,7 @@ foreach my $section (@sections){
 	$bcfWorkers{$section}->queueJobs;
 	
 	# Now queue up the variant callers
-	$vcfWorkers{$section} = slurmTools->new('workDir' => $currentDir/$opts{b}/vcf_files",
+	$vcfWorkers{$section} = slurmTools->new('workDir' => "$currentDir/$opts{b}/vcf_files",
 		'scriptDir' => "$currentDir/$opts{b}/vcf_files/scripts",
 		'outDir' => "$currentDir/$opts{b}/vcf_files/outLog",
 		'errDir' => "$currentDir/$opts{b}/vcf_files/errLog",
