@@ -37,6 +37,31 @@ sub prepSam{
 	$self->_checkFile($file);
 }
 
+# Uses samtools idxstats to get read data for a sam/bam
+sub getReads{
+	my ($self) = @_;
+
+	my $SamFile = ($self->has_bam)? $self->alternate : $self->inputFile;
+
+	if($self->has_log){
+                $self->log->Info("getReads", "Getting read count estimate for file: " . $SamFile);
+        }
+
+	open(IN, $self->samExe->SamIdxstats() . $SamFile->File . " |") || die "[SAMFILEREADER] Could not generate index stats for bam file: " . $SamFile->File . "!\n";
+	my $mappedReadCount = 0;
+        my $unmappedCount = 0;
+
+	while(my $line = <IN>){
+		chomp $line;
+		my @segs = split(/\t/, $line);
+		$mappedReadCount += $segs[2];
+                $unmappedCount += $segs[3];
+	}
+	close IN;
+	return($mappedReadCount, $unmappedCount);
+}
+
+
 # Uses samtools idxstats to get coverage data for a sam/bam
 # RETURN:
 # raw coverage, mapped coverage, hash->{chr} = [raw chr coverage, mapped chr coverage]
