@@ -3,7 +3,6 @@
 # Modification to enable the use of input unaligned bam files for mapping
 # Input tab sequence files now follow this format:
 # 1. unmapped bam, 2. lib, 3. sample
-# version 2: added a partition option
 
 use strict;
 use File::Basename;
@@ -14,8 +13,8 @@ use Cwd;
 
 my %opts;
 my @modules = ("samtools/1.3-20-gd49c73b", "bwa/0.7.13-r1126");
-my $usage = "perl $0 -b <base outfolder name> -t <input tab sequence files> -f <input reference fasta file> -m <boolean: generate and queue merger scripts> -p <optional: partition name>\n";
-getopt('btfp', \%opts);
+my $usage = "perl $0 -b <base outfolder name> -t <input tab sequence files> -f <input reference fasta file> -m <boolean: generate and queue merger scripts>\n";
+getopt('btf', \%opts);
 
 unless(defined($opts{'b'}) && defined($opts{'f'}) && defined($opts{'t'})){
 	print $usage;
@@ -52,9 +51,6 @@ while(my $line = <$IN>){
 			'tasks' => 10,
 			'mem' => 25000);
 	}
-	if(defined($opts{'p'})){
-		$slurmWorkers{$segs[-1]}->partition("$opts{p}");
-	}
 	
 	my $bname = basename($segs[0]);
 	my @bsegs = split(/\./, $bname);
@@ -62,7 +58,7 @@ while(my $line = <$IN>){
 	my $uHash = urlHash($segs[0]);
 	my $uname = "$bsegs[0].$uHash";
 	
-	my $cmd = "bwa mem -t 8 -M -R '\@RG\tID:$segs[-2]\tSM:$segs[-1]\tLB:$segs[-2]' $fasta $segs[0] $segs[1] | samtools sort -m 2G -o $uname.sorted.bam -T $uname -";
+	my $cmd = "samtools fastq $segs[0] | bwa mem -t 8 -p -M -R '\@RG\\tID:$segs[-2]\\tSM:$segs[-1]\\tLB:$segs[-2]' $fasta - | samtools sort -m 2G -o $uname.sorted.bam -T $uname -";
 	push(@{$slurmBams{$segs[-1]}}, "$uname.sorted.bam");
 	
 	$slurmWorkers{$segs[-1]}->createGenericCmd($cmd, "bwaAlign");
@@ -93,11 +89,7 @@ if(defined($opts{'m'})){
 			'nodes' => 1,
 			'tasks' => 7,
 			'mem' => 9000);
-		
-		if(defined($opts{'p'})){
-			$merger->partition("$opts{p}");
-		}
-		
+			
 		my @bams = @{$slurmBams{$samples}};
 		my $bwhitespace = join(" ", @bams);
 		my @cmds;

@@ -1,5 +1,6 @@
 #!/usr/bin/perl
 # Tools to initiate Slurm shell script generation and execution
+# ver 2: added partition option
 
 package slurmTools;
 use Mouse;
@@ -14,6 +15,7 @@ has 'scripts' => (traits => ['Array'], is => 'rw', isa => 'ArrayRef[Any]', defau
 	});
 has 'jobIds' => (is => 'rw', isa => 'ArrayRef[Any]', predicate => 'has_jobs');
 has 'dependencies' => (is => 'rw', isa => 'ArrayRef[Any]', predicate => 'has_dep');
+has 'partition' => (is => 'rw', isa => 'Str', predicate => 'has_part');
 
 sub checkJobs{
 	my ($self) = @_;
@@ -146,6 +148,9 @@ sub _generateHeader{
 	}
 	if($self->time != -1){
 		$str .= "$tag --time=" . $self->time . "\n";
+	}
+	if($self->has_part){
+		$str .= "$tag --partition=" . $self->partition . "\n";
 	}
 	if($self->has_dep){
 		my @dependencies = @{$self->dependencies};
