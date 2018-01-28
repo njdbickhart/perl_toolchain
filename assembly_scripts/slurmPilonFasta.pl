@@ -49,7 +49,7 @@ if(defined($opts{'p'})){
 	$slurmWorker->partition("$opts{p}");
 }
 foreach my $chr (keys %chrlengths){
-	my $mem = int(int($chrlengths{$chr} / 1000000) * 1.20);
+	my $mem = int(int($chrlengths{$chr} / 1000000) * 1.15);
 	$slurmWorker->mem($mem);
 	
 	my $cmd = "pilon --genome $opts{g} --frags $opts{f} --output $chr.pilon --outdir $opts{o} --fix bases --targets $chr --verbose --nostrays";
