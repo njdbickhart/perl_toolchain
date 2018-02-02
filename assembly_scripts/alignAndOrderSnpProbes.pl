@@ -8,15 +8,16 @@
 # Output: base.conflicts <- conflicting segments
 # Output: base.stats <- general statistics
 # version 2: 11/16/2017	added conflict file generation
+# version 3: 2/2/2018 added mashmap alignment format parsing
 
 use strict;
 use Getopt::Std;
 
-my $usage = "perl $0 (-a <assembly fasta> -p <probe fasta>) || (-n <nucmer aligns>) -o <output file basename>\n";
+my $usage = "perl $0 (-a <assembly fasta> -p <probe fasta>) || (-n <nucmer aligns>) || (-g <general alignment format>) -o <output file basename>\n";
 my %opts;
-getopt('apon', \%opts);
+getopt('apong', \%opts);
 
-unless(((defined($opts{'a'}) && defined($opts{'p'})) || defined($opts{'n'})) && defined($opts{'o'})){
+unless(((defined($opts{'a'}) && defined($opts{'p'})) || defined($opts{'n'}) || defined($opts{'g'})) && defined($opts{'o'})){
 	print $usage;
 	exit;
 }
@@ -24,6 +25,7 @@ unless(((defined($opts{'a'}) && defined($opts{'p'})) || defined($opts{'n'})) && 
 my $unmaps = 0; my $maps = 0; 
 my %aligns; # {ochr}->{opos} = [probe, chr, pos, orient]
 my %qcounts; # {chr}->{ochr} = count
+my %qcvals; #(only for g option) {scaffold}->{ochr}->[cum perc len, algn count]
 
 if(defined($opts{'a'})){
 open(my $IN, "module load bwa; bwa mem $opts{a} $opts{p} |") || die "Could not begin BWA alignments!\n";
@@ -61,6 +63,33 @@ close $IN;
 		$aligns{$segs[11]}->{$segs[0]} = ["none", $segs[12], $segs[2], $orient];
 	}
 	close $IN;
+}elsif(defined($opts{'g'})){
+	open(my $IN, "< $opts{g}") || die "could not open general alignment file!\n";
+	while(my $line = <$IN>){
+		chomp $line;
+		my @segs = split(/\s+/, $line);
+		$maps++;
+		my $orient = $segs[4];
+		$aligns{$segs[5]}->{$segs[7]} = ["none", $segs[0], $segs[2], $orient];
+		$qcvals{$segs[0]}->{$segs[5]}->[0] += ($segs[3] - $segs[2]) / $segs[1];
+		$qcvals{$segs[0]}->{$segs[5]}->[1] += 1;
+	}
+	close $IN;
+}
+
+if(defined($opts{'g'})){
+	# print out alignment percentage stats
+	open(my $OUT, "> $opts{o}.alnstats");
+	foreach my $scaff (sort {scalar(keys(%{$qcvals{$b}})) <=> scalar(keys(%{$qcvals{$a}}))} keys(%qcvals)){
+		print {$OUT} "$scaff";
+		foreach my $k (sort{$qcvals{$scaff}->{$b}->[0] <=> $qcvals{$scaff}->{$a}->[0]} keys(%{$qcvals{$scaff}})){
+			my $acount = $qcvals{$scaff}->{$k}->[1];
+			my $perc = sprintf("%.3f", $qcvals{$scaff}->{$k}->[0]);
+			print {$OUT} "\t$acount:$perc";
+		}
+		print {$OUT} "\n";
+	}
+	close $OUT;
 }
 
 open(my $OUT, "> $opts{o}.tab");
