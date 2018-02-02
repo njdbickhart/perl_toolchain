@@ -12,7 +12,7 @@ my @modules = ("samtools", "bwa", "pilon");
 my $usage = "perl $0 -f <input frag bam> -g <input genome fasta> -o <output directory> -p <partition>\n";
 my $currentDir = cwd();
 
-getopt('fgo', \%opts);
+getopt('fgop', \%opts);
 
 unless(defined($opts{'f'}) && defined($opts{'g'}) && defined($opts{'o'})){
 	print $usage;
@@ -49,10 +49,11 @@ if(defined($opts{'p'})){
 	$slurmWorker->partition("$opts{p}");
 }
 foreach my $chr (keys %chrlengths){
-	my $mem = int(int($chrlengths{$chr} / 1000000) * 1.15);
+	my $mem = int(int($chrlengths{$chr} / 1000) * 1.15);
+	$mem = ($mem < 1000)? 1000 : $mem;
 	$slurmWorker->mem($mem);
 	
-	my $cmd = "pilon --genome $opts{g} --frags $opts{f} --output $chr.pilon --outdir $opts{o} --fix bases --targets $chr --verbose --nostrays";
+	my $cmd = "java -Xmx$mem\M -jar \$PILONHOME/pilon-1.22.jar --genome $opts{g} --frags $opts{f} --output $chr.pilon --outdir $opts{o} --fix bases --targets $chr --verbose --nostrays";
 	$slurmWorker->createGenericCmd($cmd, "pilon$chr");
 }
 
