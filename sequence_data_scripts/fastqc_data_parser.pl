@@ -85,10 +85,17 @@ foreach my $f (@files){
 	my $fq = indivrecord->new();
 	my $head = <IN>;
 	
-	my @indiv = split(/[\._-]/, basename($f));
+	my @dir = split(/\//, $f);
+	my @indiv = split(/[\._-]/, $dir[-2]);
+	my $individual = "$indiv[0]_$indiv[1]";
 	
-	if(!exists($anhash{$indiv[0]})){
-		$anhash{$indiv[0]} = indivrecord->new();
+	if(!exists($anhash{$individual})){
+		$anhash{$individual} = indivrecord->new();
+		$anhash{$individual}->stats(stats->new());
+		$anhash{$individual}->bpquality(pbpquality->new());
+		$anhash{$individual}->seqquality(pseqquality->new());
+		$anhash{$individual}->gccontent(pbpgccontent->new());
+		$anhash{$individual}->ncontent(pbpncontent->new());
 	}
 	
 	my $store;
@@ -102,7 +109,7 @@ foreach my $f (@files){
 			my($name, $ret) = process_module_seg($store);
 			$store = '';
 			
-			my $working = $anhash{$indiv[0]};
+			my $working = $anhash{$individual};
 			
 			if($name eq "Per base sequence quality"){
 				$fq->bpquality($ret);
@@ -115,7 +122,11 @@ foreach my $f (@files){
 			}elsif($name eq "Per sequence quality scores"){
 				$fq->seqquality($ret);
 				foreach my $k (keys(%{$ret->count()})){
-					$working->seqquality->count->{$k} = $working->seqquality->count()->{$k} + $ret->count()->{$k};
+					if(!defined($working->seqquality->count->{$k})){
+						$working->seqquality->count->{$k} = $ret->count()->{$k};
+					}else{
+						$working->seqquality->count->{$k} = $working->seqquality->count()->{$k} + $ret->count()->{$k};
+					}
 				}
 				if($ret->pass() =~ m/fail/i || !defined($working->seqquality->pass())){
 					$working->seqquality->pass($ret->pass());
@@ -123,7 +134,11 @@ foreach my $f (@files){
 			}elsif($name eq "Per base sequence content"){
 				$fq->gccontent($ret);
 				foreach my $k (keys(%{$ret->gc()})){
-					$working->gccontent->gc->{$k} = ($working->gccontent->gc()->{$k} + $ret->gc()->{$k}) / 2;
+					if(!defined($working->gccontent->gc->{$k})){
+						$working->gccontent->gc->{$k} = $ret->gc()->{$k};
+					}else{
+						$working->gccontent->gc->{$k} = ($working->gccontent->gc()->{$k} + $ret->gc()->{$k}) / 2;
+					}
 				}
 				if($ret->pass() =~ m/fail/i || !defined($working->gccontent->pass())){
 					$working->gccontent->pass($ret->pass());
@@ -132,17 +147,29 @@ foreach my $f (@files){
 			}elsif($name eq "Per base N content"){
 				$fq->ncontent($ret);
 				foreach my $k (keys(%{$ret->ns()})){
-					$working->ncontent->ns->{$k} = ($working->ncontent->ns()->{$k} + $ret->ns()->{$k}) / 2;
+					if(!defined($working->ncontent->ns->{$k})){
+						$working->ncontent->ns->{$k} = $ret->ns()->{$k};
+					}else{
+						$working->ncontent->ns->{$k} = ($working->ncontent->ns()->{$k} + $ret->ns()->{$k}) / 2;
+					}
 				}
 				if($ret->pass() =~ m/fail/i || !defined($working->ncontent->pass())){
 					$working->ncontent->pass($ret->pass());
 				}
 			}elsif($name eq "Sequence Length Distribution"){
 				$fq->seqlens($ret);
-				$working->seqlens(($working->seqlens() + $ret) / 2);
+				if(!defined($working->seqlens())){
+					$working->seqlens($ret);
+				}else{
+					$working->seqlens(($working->seqlens() + $ret) / 2);
+				}
 			}elsif($name eq "Sequence Duplication Levels"){
 				$fq->seqdups($ret);
-				$working->seqdups(($working->seqdups() + $ret) / 2);
+				if(!defined($working->seqdups())){
+					$working->seqdups($ret);
+				}else{
+					$working->seqdups(($working->seqdups() + $ret) / 2);
+				}
 			}elsif($name eq "Overrepresented sequences"){
 				$fq->overrep($ret);
 				$working->overrep($ret) if(!defined($working->overrep()) || $ret =~ m/fail/i);
@@ -151,10 +178,17 @@ foreach my $f (@files){
 				$working->kmercon($ret) if(!defined($working->kmercon()) || $ret =~ m/fail/i);
 			}elsif($name eq "Basic Statistics"){
 				$fq->stats($ret);
-				$working->stats->totseq($working->stats->totseq() + $ret->totseq());
-				$working->stats->filtseq($working->stats->filtseq() + $ret->filtseq());
-				$working->stats->seqlen(($working->stats->seqlen() + $ret->seqlen()) / 2);
-				$working->stats->gc(($working->stats->gc() + $ret->gc()) / 2);
+				if(!defined($working->stats->totseq())){
+					$working->stats->totseq($ret->totseq());
+					$working->stats->filtseq($ret->filtseq());
+					$working->stats->seqlen($ret->seqlen());
+					$working->stats->gc($ret->gc());
+				}else{
+					$working->stats->totseq($working->stats->totseq() + $ret->totseq());
+					$working->stats->filtseq($working->stats->filtseq() + $ret->filtseq());
+					$working->stats->seqlen(($working->stats->seqlen() + $ret->seqlen()) / 2);
+					$working->stats->gc(($working->stats->gc() + $ret->gc()) / 2);
+				}
 				if($ret->pass() =~ m/fail/i || !defined($working->stats->pass())){
 					$working->stats->pass($ret->pass());
 				}
