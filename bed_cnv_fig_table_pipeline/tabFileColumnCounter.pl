@@ -5,6 +5,7 @@
 # 4/18/2016: added feature to skip empty lines
 # 12/12/2016: made it so that all single space characters are delimited by default
 # 2/23/2017: added numerical counting feature -- not tested on table generation!!!
+# 2/26/2018: added alternative delimiter setting
 
 use strict;
 use Getopt::Std;
@@ -17,6 +18,7 @@ REQUIRED:
 	-c	The column number (Zero based!) to count features
 	
 OPTIONAL:
+	-d	Alternative delimiter [Default option:\\s+\\
 	-o	Output file [Default option: STDOUT]
 	-e	Comment prefix. Exclude lines that begin with this character [Default option: exclude nothing]
 	-m	Markdown flag. Formats output into table format [Default option: tab delimited]
@@ -24,7 +26,7 @@ OPTIONAL:
 \n";
 
 my %opts;
-getopt('fcoe', \%opts);
+getopt('fdcoe', \%opts);
 
 unless(defined($opts{'f'}) && defined($opts{'c'})){
 	print $usage;
@@ -38,6 +40,9 @@ my @files = split(/,/, $opts{'f'});
 if(scalar(@files) == 1){
 	# Just a single comparison
 	my $worker = columnCounter->new('colnum' => $opts{'c'}, 'mkdwn' => $mbool);
+	if(defined($opts{'d'})){
+		$worker->del($opts{'d'});
+	}
 	if(defined($opts{'x'})){
 		$worker->numeric(1);
 	}
@@ -62,6 +67,9 @@ if(scalar(@files) == 1){
 		my $filename = "File" . ($x + 1);
 		
 		my $worker = columnCounter->new('colnum' => $opts{'c'}, 'mkdwn' => $mbool);
+		if(defined($opts{'d'})){
+			$worker->del($opts{'d'});
+		}
 		
 		if(defined($opts{'x'})){
 			$worker->numeric(1);

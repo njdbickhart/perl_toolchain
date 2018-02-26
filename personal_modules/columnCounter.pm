@@ -8,6 +8,7 @@ has 'colnum' => (is => 'rw', isa => 'Int', required => 1);
 has 'mkdwn' => (is => 'ro', isa => 'Bool', required => 1);
 has 'numeric' => (is => 'rw', isa => 'Bool', default => 0);
 
+has 'del' =>(is => 'rw', isa => 'Str', default => '\\s{1}');
 has 'output' => (is => 'rw', isa => 'Str', predicate => 'has_output');
 has 'ignore' => (is => 'rw', isa => 'Str', predicate => 'has_ignore');
 has 'counter' => (traits => ['Hash'], is => 'rw', isa => 'HashRef[Any]', default => sub{{}},
@@ -59,8 +60,8 @@ sub readFile{
 				next;
 			}
 		}
-		
-		my @segs = split(/\s{1}/, $line);
+		my $del = $self->del();
+		my @segs = split(/$del/, $line);
 		if(scalar(@segs) < $col + 1){next;}
 		
 		if($self->numeric){

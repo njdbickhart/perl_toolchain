@@ -8,7 +8,7 @@ use FileHandle;
 use bamTools;
 
 my %opts;
-my $usage = "perl $0 -b <bam files (comma separated)> || -l <ls of bam files> [-o <output tab file [otherwise, STDOUT]>]
+my $usage = "perl $0 -b <bam files (comma separated)> || -l <ls of bam files> || -n <newline delimited list of bams>[-o <output tab file [otherwise, STDOUT]>]
 REQUIRED:
 	-b	Input bam files to check (multiple bams can be input if entered as comma delimited values (no spaces!))
 	
@@ -20,11 +20,11 @@ if(scalar(@ARGV) == 0 || $ARGV[0] eq '-h'){
 	exit;
 }
 
-getopt('bol', \%opts);
+getopt('boln', \%opts);
 
 
 
-unless(defined($opts{'b'}) || defined($opts{'l'})){
+unless(defined($opts{'b'}) || defined($opts{'l'}) || defined($opts{'n'})){
 	print "Missing mandatory arguments!\n";
 	print $usage;
 	exit;
@@ -51,6 +51,13 @@ if(defined($opts{'b'})){
 		print STDERR "Error finding bam files from the following LS command: $opts{l}!\n";
 		exit;
 	}
+}elsif(defined($opts{'n'})){
+	open(my $IN, "< $opts{n}") || die "Could not open list of delimited bams!\n$usage";
+	while(my $line = <$IN>){
+		chomp $line;
+		push(@bams, $line);
+	}
+	close $IN;
 }
 print STDERR "Determining raw x coverage from $bamnum bams...\n";
 print $fh "BamName\tTotalReads\tMappedReads\tUnmappedReads\tRawXCov\tMapXCov\tAvgRawChrcov\tAvgMapChrcov\n";

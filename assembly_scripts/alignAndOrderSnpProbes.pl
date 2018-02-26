@@ -13,9 +13,9 @@
 use strict;
 use Getopt::Std;
 
-my $usage = "perl $0 (-a <assembly fasta> -p <probe fasta>) || (-n <nucmer aligns>) || (-g <general alignment format>) -o <output file basename>\n";
+my $usage = "perl $0 (-a <assembly fasta> -p <probe fasta>) || (-n <nucmer aligns>) || (-g <general alignment format> -m <median algn length to filter>) -o <output file basename>\n";
 my %opts;
-getopt('apong', \%opts);
+getopt('apongm', \%opts);
 
 unless(((defined($opts{'a'}) && defined($opts{'p'})) || defined($opts{'n'}) || defined($opts{'g'})) && defined($opts{'o'})){
 	print $usage;
@@ -26,32 +26,33 @@ my $unmaps = 0; my $maps = 0;
 my %aligns; # {ochr}->{opos} = [probe, chr, pos, orient]
 my %qcounts; # {chr}->{ochr} = count
 my %qcvals; #(only for g option) {scaffold}->{ochr}->[cum perc len, algn count]
+my %scaflens; #(only for g option) {scaffold} = length
 
 if(defined($opts{'a'})){
-open(my $IN, "module load bwa; bwa mem $opts{a} $opts{p} |") || die "Could not begin BWA alignments!\n";
-while(my $line = <$IN>){
-	if($line =~ /^@/){
-		next;
-	}
+	open(my $IN, "module load bwa; bwa mem $opts{a} $opts{p} |") || die "Could not begin BWA alignments!\n";
+	while(my $line = <$IN>){
+		if($line =~ /^@/){
+			next;
+		}
 
-	chomp $line;
-	my @segs = split(/\t/, $line);
-	my @rnsegs = split(/\./, $segs[0]);
-	if($segs[1] & 2048){
-		next;
+		chomp $line;
+		my @segs = split(/\t/, $line);
+		my @rnsegs = split(/\./, $segs[0]);
+		if($segs[1] & 2048){
+			next;
+		}
+		#if($rnsegs[1] == 0){next;} # Takes care of probes without prior chromosome alignments
+		if($segs[2] eq "*"){
+			$unmaps++; # Count unmapped probes
+		}else{
+			$maps++;
+		}
+		$segs[2] =~ s/[\|\;]/_/g; # Convert bad characters to underscores
+		my $orient = ($segs[1] & 16)? "-" : "+";
+		$qcounts{$segs[2]}->{$rnsegs[1]} += 1;
+		$aligns{$rnsegs[1]}->{$rnsegs[2]} = [$rnsegs[0], $segs[2], $segs[3], $orient];
 	}
-	if($rnsegs[1] == 0){next;} # Takes care of probes without prior chromosome alignments
-	if($segs[2] eq "*"){
-		$unmaps++; # Count unmapped probes
-	}else{
-		$maps++;
-	}
-	$segs[2] =~ s/[\|\;]/_/g; # Convert bad characters to underscores
-	my $orient = ($segs[1] & 16)? "-" : "+";
-	$qcounts{$segs[2]}->{$rnsegs[1]} += 1;
-	$aligns{$rnsegs[1]}->{$rnsegs[2]} = [$rnsegs[0], $segs[2], $segs[3], $orient];
-}
-close $IN;
+	close $IN;
 }elsif(defined($opts{'n'})){
 	open(my $IN, "< $opts{n}") || die "Could not open nucmer aligns!\n";
 	while(my $line = <$IN>){
@@ -70,9 +71,13 @@ close $IN;
 		my @segs = split(/\s+/, $line);
 		$maps++;
 		my $orient = $segs[4];
+		if($segs[3] - $segs[2] < $opts{'m'}){next;} # Skip alignments less than the designated median
 		$aligns{$segs[5]}->{$segs[7]} = ["none", $segs[0], $segs[2], $orient];
+		$aligns{$segs[5]}->{$segs[8]} = ["none", $segs[0], $segs[3], $orient];
 		$qcvals{$segs[0]}->{$segs[5]}->[0] += ($segs[3] - $segs[2]) / $segs[1];
 		$qcvals{$segs[0]}->{$segs[5]}->[1] += 1;
+		$qcounts{$segs[0]}->{$segs[5]} += 1;
+		$scaflens{$segs[0]} = $segs[1];
 	}
 	close $IN;
 }
@@ -81,11 +86,11 @@ if(defined($opts{'g'})){
 	# print out alignment percentage stats
 	open(my $OUT, "> $opts{o}.alnstats");
 	foreach my $scaff (sort {scalar(keys(%{$qcvals{$b}})) <=> scalar(keys(%{$qcvals{$a}}))} keys(%qcvals)){
-		print {$OUT} "$scaff";
+		print {$OUT} "$scaff\t$scaflens{$scaff}";
 		foreach my $k (sort{$qcvals{$scaff}->{$b}->[0] <=> $qcvals{$scaff}->{$a}->[0]} keys(%{$qcvals{$scaff}})){
 			my $acount = $qcvals{$scaff}->{$k}->[1];
 			my $perc = sprintf("%.3f", $qcvals{$scaff}->{$k}->[0]);
-			print {$OUT} "\t$acount:$perc";
+			print {$OUT} "\t$k:$acount:$perc";
 		}
 		print {$OUT} "\n";
 	}
@@ -136,17 +141,29 @@ foreach my $chr (sort{$a <=> $b} keys(%aligns)){
 		print {$STATS} " $consensus->[$x]:$values->[$x]";
 	}
 	print {$STATS} "\n";
+	if(defined($opts{'g'})){
+		my ($refblocks, $qblocks) = condenseAlignments($aligns{$chr}, 1000000);
+		for(my $x = 0; $x < scalar(@{$refblocks}); $x++){
+			my $ref = $refblocks->[$x];
+			my $query = $qblocks->[$x];
+			my $rlen = abs($ref->[1] - $ref->[0]);
+			my $qlen = abs($query->[0] - $query->[1]);
+			my $orient = ($query->[0] < $query->[1])? "+" : "-";
+			print {$SEGS} "$chr\t$ref->[0]\t$ref->[1]\t$query->[2]\t$query->[0]\t$query->[1]\t$orient\t$rlen\t$qlen\n";
+		}
+	}else{
 
-	my ($refblocks, $qblocks) = identifyAndCondenseSegs($aligns{$chr}, $consensus->[0], $qconsensus{$chr});
-	for(my $x = 0; $x < scalar(@{$refblocks}); $x++){
-		my $ref = $refblocks->[$x];
-		my $query = $qblocks->[$x];
-		my $rlen = abs($ref->[1] - $ref->[0]);
-		my $qlen = abs($query->[0] - $query->[1]);
-		my $orient = ($query->[0] < $query->[1])? "+" : "-";
-		print {$SEGS} "$chr\t$ref->[0]\t$ref->[1]\t$query->[2]\t$query->[0]\t$query->[1]\t$orient\t$rlen\t$qlen\n";
+		my ($refblocks, $qblocks) = identifyAndCondenseSegs($aligns{$chr}, $consensus->[0], $qconsensus{$chr});
+		for(my $x = 0; $x < scalar(@{$refblocks}); $x++){
+			my $ref = $refblocks->[$x];
+			my $query = $qblocks->[$x];
+			my $rlen = abs($ref->[1] - $ref->[0]);
+			my $qlen = abs($query->[0] - $query->[1]);
+			my $orient = ($query->[0] < $query->[1])? "+" : "-";
+			print {$SEGS} "$chr\t$ref->[0]\t$ref->[1]\t$query->[2]\t$query->[0]\t$query->[1]\t$orient\t$rlen\t$qlen\n";
+		}
 	}
-
+	
 	foreach my $pos (sort{$a <=> $b} keys(%{$aligns{$chr}})){
 		my $arrayref = $aligns{$chr}->{$pos};
 		print {$OUT} join("\t", @{$arrayref});
@@ -159,6 +176,47 @@ close $SEGS;
 
 
 exit;
+
+sub condenseAlignments{
+	my ($hashref, $thresh) = @_;
+	# Logic: because these are placed alignments, I can sort them based on the original reference coordinates
+	# No need for complex error tolerance, but I will discard condensed alignments below a certain bp length
+	#my %aligns; # {ochr}->{opos} = [probe, chr, pos, orient]
+	my @refblock; # [start, end]
+	my @queryblock; # [start, end, chr, orient]
+	
+	my @buff; my $count = 0; my $segs = 0;
+	foreach my $pos (sort{$a <=> $b} keys(%{$hashref})){
+		my $query = $hashref->{$pos};
+
+		if($segs == 0){
+			#initializing segments
+			push(@refblock, [$pos, $pos]);
+			push(@queryblock, [$query->[2], $query->[2], $query->[1], $query->[3]]);
+			$segs++;
+		}else{
+			my $last = $queryblock[-1];
+			if($last->[2] eq $query->[1] && $last->[3] eq $query->[3] 
+				&& min(abs($last->[0] - $query->[2]), abs($last->[1] - $query->[2])) < $thresh){
+				# This is an overlapping alignment
+				$queryblock[-1]->[1] = $query->[2];
+				$refblock[-1]->[1] = $pos;
+				$count++;
+			}else{
+				# starting a new segment
+				push(@refblock, [$pos, $pos]);
+				push(@queryblock, [$query->[2], $query->[2], $query->[1], $query->[3]]);
+				$segs++;
+			}
+		}
+	}
+	return \@refblock, \@queryblock;
+}
+
+sub min{
+	my ($a, $b) = @_;
+	return ($a < $b)? $a : $b;
+}
 
 sub identifyAndCondenseSegs{
 	my ($hashref, $consensus, $qconsensus) = @_;

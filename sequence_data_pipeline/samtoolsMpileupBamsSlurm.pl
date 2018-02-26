@@ -91,11 +91,14 @@ foreach my $section (@sections){
 	}
 	
 	my $uname = "bcf_segment_$section";
+	$uname =~ s/[\:-]/_/g;
 	
-	my $cmd = "bcftools mpileup -Ob -o $uname.bcf -f $currentDir/$opts{f} --threads 3 -S $opts{t}";
+	my $cmd = "bcftools mpileup -Ob -r $section -o $uname.bcf -f $currentDir/$opts{f} --threads 3 -b $currentDir/$opts{t}";
 	push(@slurmBcfs, "$uname.bcf");
 	
-	$bcfWorkers{$section}->createGenericCmd($cmd, "mpileup_$section");
+	my $sname = "mpileup_$section";
+	$sname =~ s/[\:-]/_/g;
+	$bcfWorkers{$section}->createGenericCmd($cmd, $sname);
 	$scriptCounter++;
 	$bcfWorkers{$section}->queueJobs;
 	
@@ -106,18 +109,19 @@ foreach my $section (@sections){
 		'errDir' => "$currentDir/$opts{b}/vcf_files/errLog",
 		'modules' => \@modules,
 		'useTime' => 0,
-		'dependencies' => $bcfWorkers{$section}->jobids,
+		'dependencies' => $bcfWorkers{$section}->jobIds,
 		'nodes' => 1,
 		'tasks' => 4,
 		'mem' => 25000);
 	
 	my $vname = "vcf_segment_$section";
-	my $vcmd = "bcftools call -vmO z -o $vname.vcf.gz --threads 3 $uname.bcf";
+	$vname =~ s/[\:-]/_/g;
+	my $vcmd = "bcftools call -vmO z -r $section -o $vname.vcf.gz --threads 3 $uname.bcf";
 	
 	$vcfWorkers{$section}->createGenericCmd($cmd, "call_$section");
 	$vcfWorkers{$section}->queueJobs;
 	
-	push(@vcfJobids, @{$vcfWorkers{$section}->jobids});
+	push(@vcfJobids, @{$vcfWorkers{$section}->jobIds});
 	push(@slurmVcfs, "$vname.vcf.gz");
 }
 
