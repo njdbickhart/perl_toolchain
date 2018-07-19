@@ -1,5 +1,6 @@
 #!/usr/bin/perl
 # This is a script designed to process both fasta and fastq files to calculate a histogram of average GC content of reads
+# Revision: Since R REALLY wants to deal with raw counts at all times, I'm going to output newline delimited gc values
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --mem=5000
@@ -30,14 +31,16 @@ seek($TEST, 0, 0);
 close $TEST;
 
 # Now open the file and count GC
-my %gcBins;
+#my %gcBins;
 open(my $IN, "gunzip -c $opts{f} |");
+open(my $OUT, "> $opts{o}");
 if($fastq){
 	while(my $head = <$IN>){
 		my $seq = <$IN>;
 		chomp $seq;
 		my $gc = calcGC($seq);
-		$gcBins{$gc} += 1;
+		#$gcBins{$gc} += 1;
+		print {$OUT} "$gc\n";
 		for(my $x = 0; $x < 2; $x++){
 			<$IN>; # Get rid of the next two lines
 		}
@@ -52,17 +55,12 @@ if($fastq){
 		}
 		chomp($line);
 		my $gc = calcGC($line);
-		$gcBins{$gc} += 1;
+		#$gcBins{$gc} += 1;
+		print {$OUT} "$gc\n";
 	}
 	close $IN;
 }
 
-# Now to print out the GC bins
-open(my $OUT, "> $opts{o}");
-print {$OUT} "GC\tCount\n";
-foreach my $gc (sort{$a <=> $b} keys(%gcBins)){
-	print {$OUT} "$gc\t$gcBins{$gc}\n";
-}
 close $OUT;
 
 
