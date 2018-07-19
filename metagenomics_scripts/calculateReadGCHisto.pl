@@ -3,7 +3,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --mem=5000
-use Getopt::Std
+use Getopt::Std;
 
 my $usage = "perl $0 -f <gzipped fastq or fasta file> -o <output gc occurance histogram>\n";
 
