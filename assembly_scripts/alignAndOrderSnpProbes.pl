@@ -7,21 +7,35 @@
 # Output: base.segs <- identified chromosome segments
 # Output: base.conflicts <- conflicting segments
 # Output: base.stats <- general statistics
+# Output: (if circos) base(folder) -> basefilenames
 # version 2: 11/16/2017	added conflict file generation
 # version 3: 2/2/2018 added mashmap alignment format parsing
 # version 4: 3/1/2018 modifying probe alignment sequence algorithm. Tracking variant site rather than forward 5' alignment position
+# version 5: 10/9/2018 generate circos data files for plotting
 
 use strict;
 use Getopt::Std;
 
-my $usage = "perl $0 (-a <assembly fasta> -p <probe fasta>) || (-n <nucmer aligns>) || (-g <general alignment format> -m <median algn length to filter>) -o <output file basename>\n";
+my $usage = "perl $0 (-a <assembly fasta> -p <probe fasta>) || (-n <nucmer aligns>) || (-g <general alignment format> -m <median algn length to filter>) -c <circos file flag> ((if c) -f <query fasta fai file> && -r <reference fasta fai file>) -o <output file basename>\n";
 my %opts;
-getopt('apongm', \%opts);
+getopt('apongmfr', \%opts);
 
 unless(((defined($opts{'a'}) && defined($opts{'p'})) || defined($opts{'n'}) || defined($opts{'g'})) && defined($opts{'o'})){
 	print $usage;
 	exit;
 }
+
+my $circosOut;
+if(defined($opts{'c'})){
+	unless(defined($opts{'f'}) && defined($opts{'r'})){
+		print "Need option f and r defined for circos plot!\n";
+		print $usage;
+		exit;
+	}
+	$circosOut = $opts{'o'} . "_circos";
+	mkdir($circosOut) || print "$!";
+}
+
 
 my $unmaps = 0; my $maps = 0; 
 my %aligns; # {ochr}->{opos} = [] ->[probe, chr, pos, orient]
@@ -327,4 +341,67 @@ sub calcAlignLen{
 		}
 	}
 	return $len;
+}
+sub getSortedChrs{
+	my ($cref) = @_;
+	return sort {
+		my ($c1, $x) = $a =~ /(chr)*(.+)/;
+		my ($c2, $y) = $b =~ /(chr)*(.+)/;
+		if($x eq "X"){
+			$x = 500;
+		}elsif($x eq "Y"){
+			$x = 501;
+		}elsif($x eq "M" || $x eq "MT"){
+			$x = 502;
+		}
+
+		if($y eq "X"){
+			$y = 500;
+		}elsif($y eq "Y"){
+			$y = 501;
+		}elsif($y eq "M" || $x eq "MT"){
+			$y = 502;
+		}
+		$x <=> $y}
+	keys(%{$cref});
+
+sub printKaryotype{
+	my ($qref, $rref, $outbase) = @_;
+	open(my $OUT, "> $outbase/$outbase.karyotype.txt");
+	my @qchrs = getSortedChrs($qref);
+	my @rchrs = getSortedChrs($rref);
+	for(my $x = 0; $x < scalar(@qchrs); $x++){
+		print {$OUT} "chr - q$x $qchrs[$x] 0 " . $qref->{$qchrs[$x]} . " grey\n";
+	}
+	for(my $x = 0; $x < scalar(@rchrs); $x++){
+		print {$OUT} "chr - r$x $rchrs[$x] 0 " . $rref->{$rchrs[$x]} . " black\n";
+	}
+	close $OUT;
+	return \@qchrs, \@rchrs;
+}
+
+sub printLinks{
+	my ($qref, $rref, $rchr, $refblocks, $qblocks, $thresh, $outbase) = @_;
+	#refblocks [start, end]
+	#queryblocks [start, end, chr, testbit]
+	my @qchrs = getSortedChrs($qref);
+	my @rchrs = getSortedChrs($rref);
+	my %qlookup = map { $_ => $qchrs[$_] } 0..$#qchrs;
+	my %rlookup = map { $_ => $rchrs[$_] } 0..$#rchrs;
+	
+	
+	my $linkNum = 0;
+	my $ridxchr = "r" . $rlookup{$rchr};
+	open(my $OUT, ">> $outbase/$outbase.links.txt");
+	for(my $x = 0; $x < scalar(@refblocks); $x++){
+		my $rlen = $refblocks->[$x]->[1] - $refblocks->[$x]->[0];
+		my $qlen = $qblocks->[$x]->[1] - $qblocks->[$x]->[0];
+		if($rlen < $thresh || $qlen < $thresh){next;}
+		
+		my $qidxchr = "q" . $qlookup{$qblocks->[$x]->[2]};
+		
+		print {$OUT} "link$linkNum $ridxchr " . $refblocks->[$x]->[0] . " " . $refblocks->[$x]->[1] " color=red\n";
+		print {$OUT} "link$linkNum $qidxchr " . $qblocks->[$x]->[0] . " " . $qblocks->[$x]->[1] " color=red\n";
+	}
+	close $OUT;
 }
