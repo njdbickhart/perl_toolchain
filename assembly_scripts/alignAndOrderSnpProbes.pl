@@ -26,12 +26,30 @@ unless(((defined($opts{'a'}) && defined($opts{'p'})) || defined($opts{'n'}) || d
 }
 
 my $circosOut;
+my %qchrs; # {chr} => length
+my %rchrs; # {chr} => length
 if(defined($opts{'c'})){
 	unless(defined($opts{'f'}) && defined($opts{'r'})){
 		print "Need option f and r defined for circos plot!\n";
 		print $usage;
 		exit;
 	}
+	open(my $IN, "< $opts{f}") || die "Could not open query fai index file!\n";
+	while(my $line = <$IN>){
+		chomp $line;
+		my @segs = split(/\t/, $line);
+		$qchrs{$segs[0]} = $segs[1];
+	}
+	close $IN;
+	
+	open(my $IN, "< $opts{r}") || die "Could not open reference fai index file!\n";
+	while(my $line = <$IN>){
+		chomp $line;
+		my @segs = split(/\t/, $line);
+		$rchrs{$segs[0]} = $segs[1];
+	}
+	close $IN;
+	
 	$circosOut = $opts{'o'} . "_circos";
 	mkdir($circosOut) || print "$!";
 }
@@ -42,6 +60,8 @@ my %aligns; # {ochr}->{opos} = [] ->[probe, chr, pos, orient]
 my %qcounts; # {chr}->{ochr} = count
 my %qcvals; #(only for g option) {scaffold}->{ochr}->[cum perc len, algn count]
 my %scaflens; #(only for g option) {scaffold} = length
+
+## READ INPUT ##
 
 if(defined($opts{'a'})){
 	open(my $IN, "module load bwa; bwa mem $opts{a} $opts{p} |") || die "Could not begin BWA alignments!\n";
@@ -99,6 +119,8 @@ if(defined($opts{'a'})){
 	close $IN;
 }
 
+## OUTPUT routines ##
+
 if(defined($opts{'g'})){
 	# print out alignment percentage stats
 	open(my $OUT, "> $opts{o}.alnstats");
@@ -113,6 +135,11 @@ if(defined($opts{'g'})){
 	}
 	close $OUT;
 }
+
+if(defined($opts{'c'})){
+	printKaryotype(\%qchrs, \%rchrs, $circosOut);
+}
+
 
 open(my $OUT, "> $opts{o}.tab");
 open(my $STATS, "> $opts{o}.stats");
@@ -168,6 +195,10 @@ foreach my $chr (sort{$a <=> $b} keys(%aligns)){
 			my $orient = ($query->[0] < $query->[1])? "+" : "-";
 			print {$SEGS} "$chr\t$ref->[0]\t$ref->[1]\t$query->[2]\t$query->[0]\t$query->[1]\t$orient\t$rlen\t$qlen\n";
 		}
+		
+		if(defined($opts{'c'})){
+			printLinks(\%qchrs, \%rchrs, $chr, $refblocks, $qblocks, 1000000, $circosOut);
+		}
 	}else{
 
 		my ($refblocks, $qblocks) = identifyAndCondenseSegs($aligns{$chr}, $consensus->[0], $qconsensus{$chr});
@@ -178,6 +209,10 @@ foreach my $chr (sort{$a <=> $b} keys(%aligns)){
 			my $qlen = abs($query->[0] - $query->[1]);
 			my $orient = ($query->[0] < $query->[1])? "+" : "-";
 			print {$SEGS} "$chr\t$ref->[0]\t$ref->[1]\t$query->[2]\t$query->[0]\t$query->[1]\t$orient\t$rlen\t$qlen\n";
+		}
+		
+		if(defined($opts{'c'})){
+			printLinks(\%qchrs, \%rchrs, $chr, $refblocks, $qblocks, 1000000, $circosOut);
 		}
 	}
 	
