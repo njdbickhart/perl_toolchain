@@ -364,6 +364,7 @@ sub getSortedChrs{
 		}
 		$x <=> $y}
 	keys(%{$cref});
+}
 
 sub printKaryotype{
 	my ($qref, $rref, $outbase) = @_;
@@ -393,15 +394,15 @@ sub printLinks{
 	my $linkNum = 0;
 	my $ridxchr = "r" . $rlookup{$rchr};
 	open(my $OUT, ">> $outbase/$outbase.links.txt");
-	for(my $x = 0; $x < scalar(@refblocks); $x++){
+	for(my $x = 0; $x < scalar(@{$refblocks}); $x++){
 		my $rlen = $refblocks->[$x]->[1] - $refblocks->[$x]->[0];
 		my $qlen = $qblocks->[$x]->[1] - $qblocks->[$x]->[0];
 		if($rlen < $thresh || $qlen < $thresh){next;}
 		
 		my $qidxchr = "q" . $qlookup{$qblocks->[$x]->[2]};
 		
-		print {$OUT} "link$linkNum $ridxchr " . $refblocks->[$x]->[0] . " " . $refblocks->[$x]->[1] " color=red\n";
-		print {$OUT} "link$linkNum $qidxchr " . $qblocks->[$x]->[0] . " " . $qblocks->[$x]->[1] " color=red\n";
+		print {$OUT} "link$linkNum $ridxchr " . $refblocks->[$x]->[0] . " " . $refblocks->[$x]->[1] . " color=red\n";
+		print {$OUT} "link$linkNum $qidxchr " . $qblocks->[$x]->[0] . " " . $qblocks->[$x]->[1] . " color=red\n";
 	}
 	close $OUT;
 }
