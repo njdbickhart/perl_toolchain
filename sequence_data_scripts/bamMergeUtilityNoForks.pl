@@ -64,7 +64,7 @@ if(scalar(@needsindexing) > 0){
 		samIndexer($f);
 	}
 }
-waitall();
+#waitall();
 
 # Create the header for the bam file
 my $header = "header.temp.sam";
