@@ -4,6 +4,7 @@
 # output format:
 #	Type	OChr	OGapstart	OGapend	OGaplen	SChr	Salign1coords	Salign2coords	Sfilledbases	SpercFilled	SObsGapSize
 # 10/2/2016: updated logic to identify faulty alignments that were not properly mapped
+# 3/26/2019: Removed the penalty for excessive soft-clipping. Instead, modified read start position based on soft-clipped bases.
 
 use strict;
 use Getopt::Std;
@@ -112,12 +113,17 @@ sub ProcessGapFQ{
 			$unmap->{$segs[0]} = 1;
 			next;
 		}else{
+			# Updated, updated logic: Cigar softclipping is no longer penalized as unmapped
+			# 	instead, update original mapping location to remove softclipped bases.
+			#	We suspect the old assembly may be flawed in this region; hence the gap!
 			my $cigarsoft = $self->_determineCigarSoftClip($segs[5]);
-			if($cigarsoft > 50){
+			#if($cigarsoft > 50){
 				# updated logic: > 10% of read length in soft clipping is unmapped
-				$unmap->{$segs[0]} = 1;
-			}
-			my $aend = $self->_determineCigarLen($segs[3], $segs[5]);
+				#$unmap->{$segs[0]} = 1;
+			#}
+			# Remove cigar softclipped bases if they're on the left side of the alignment
+			my $astart = $segs[3] - (($self->_determineCigarSoftPos($segs[5]))? $cigarsoft : 0);
+			my $aend = $self->_determineCigarLen($astart, $segs[5]);
 			if($store->{$segs[0]}->has_SChr && $store->{$segs[0]}->SChr ne $segs[2]){
 				$store->{$segs[0]}->Type("Trans");
 				$store->{$segs[0]}->TChr($segs[2]);
@@ -129,11 +135,11 @@ sub ProcessGapFQ{
 
 			if($readnum == 1){
 				$store->{$segs[0]}->O1($orient);
-				$store->{$segs[0]}->S1Start($segs[3]);
+				$store->{$segs[0]}->S1Start($astart);
 				$store->{$segs[0]}->S1End($aend);
 			}else{
 				$store->{$segs[0]}->O2($orient);
-				$store->{$segs[0]}->S2Start($segs[3]);
+				$store->{$segs[0]}->S2Start($astart);
 				$store->{$segs[0]}->S2End($aend);
 			}
 		}
@@ -152,6 +158,13 @@ sub _determineCigarSoftClip{
 		$soft += $count;
 	}
 	return $soft;
+}
+
+sub _determineCigarSoftPos{
+	# We need to know if the soft clipping is on the left side
+	# Returns a 0 if true
+	my ($self, $cigar) = @_;
+	return $cigar =~ m/^(\d+)[SH]/;
 }
 
 sub _determineCigarLen{
