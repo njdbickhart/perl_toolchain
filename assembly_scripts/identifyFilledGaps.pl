@@ -192,7 +192,7 @@ sub _determineCigarLen{
 sub PrepareGapRegions{
 	my $self = shift(@_);
 	# Get chr sizes
-	if( -s $self->Oref . ".fai"){
+	if(! -s $self->Oref . ".fai"){
 		print STDERR "Generating fasta reference file...\n";
 		system("samtools faidx " . $self->Oref);
 	}
