@@ -5,6 +5,7 @@
 #	Type	OChr	OGapstart	OGapend	OGaplen	SChr	Salign1coords	Salign2coords	Sfilledbases	SpercFilled	SObsGapSize
 # 10/2/2016: updated logic to identify faulty alignments that were not properly mapped
 # 3/26/2019: Removed the penalty for excessive soft-clipping. Instead, modified read start position based on soft-clipped bases.
+# 3/27/2019: Added a means of tracking soft-clip gap start modifications by appending a new "type" prefix to those modifications.
 
 use strict;
 use Getopt::Std;
@@ -45,7 +46,8 @@ my $pairSam = "temp.gap.sam";
 
 # Storage -> {readname = Ochr_Ostart_Oend} -> [gaps]
 has 'Storage' => (is => 'rw', isa => 'HashRef[Any]', default => sub{{}});
-has 'Unmapped' => (traits => ['Hash'], is => 'rw', isa => 'HashRef[Str]', default => sub {{}}, handles => {'isunmapped' => 'exists',}); 
+has 'Unmapped' => (traits => ['Hash'], is => 'rw', isa => 'HashRef[Str]', default => sub {{}}, handles => {'isunmapped' => 'exists',});
+has 'Clipped' => (traits => ['Hash'], is => 'rw', isa => 'HashRef[Str]', default => sub {{}}, handles => {'isclipped' => 'exists',});
 has ['Oref', 'Sref', 'GetMask', 'Java'] => (is => 'ro', isa => 'Str', required => 1);
 
 sub GenerateOutput{
@@ -56,7 +58,7 @@ sub GenerateOutput{
 	open(my $OUT, "> $output");
 	foreach my $k (sort {$a cmp $b} keys(%{$store})){
 		if(!$store->{$k}->has_Type){
-			$store->{$k}->DetermineType;
+			$store->{$k}->DetermineType($self->isclipped($k));
 		}
 		if($self->isunmapped($k)){
 			# New logic: set to unmapped if it fit prior criteria
@@ -87,6 +89,7 @@ sub ProcessGapFQ{
 	open(my $SAM, "< $pairSam") || die "Could not open sam file!\n";
 	my $store = $self->Storage;
 	my $unmap = $self->Unmapped;
+	my $clip = $self->Clipped;
 	while(my $line = <$SAM>){
 		if($line =~ /^@/){next;}
 		
@@ -122,10 +125,15 @@ sub ProcessGapFQ{
 				#$unmap->{$segs[0]} = 1;
 			#}
 			# Remove cigar softclipped bases if they're on the left side of the alignment
-			my $astart = $segs[3] - (($self->_determineCigarSoftPos($segs[5]))? $cigarsoft : 0);
+			my $isClip = ($self->_determineCigarSoftPos($segs[5]));
+			if($isClip){
+				$clip->{$segs[0]} = 1;
+			}
+			my $astart = $segs[3] - ($isClip? $cigarsoft : 0);
 			my $aend = $self->_determineCigarLen($astart, $segs[5]);
 			if($store->{$segs[0]}->has_SChr && $store->{$segs[0]}->SChr ne $segs[2]){
-				$store->{$segs[0]}->Type("Trans");
+				my $temptypestr = ($isClip)? "Clip_" : "";
+				$store->{$segs[0]}->Type($temptypestr . "Trans");
 				$store->{$segs[0]}->TChr($segs[2]);
 				my $TOrient = ($readnum == 1)? "First" : "Second";
 				$store->{$segs[0]}->TOrient($TOrient);
@@ -146,6 +154,7 @@ sub ProcessGapFQ{
 	}
 	$self->Storage($store);
 	$self->Unmapped($unmap);
+	$self->Clipped($clip);
 	
 	print STDERR "Finished sam file processing!\n";
 	close $SAM;
@@ -321,7 +330,7 @@ foreach my $m ('OGapS', 'OGapE', 'S1Start', 'S1End', 'S2Start', 'S2End', 'Sfille
 
 sub DetermineFilled{
 	my ($self, $ref) = @_;
-	if($self->has_SChr && $self->has_S1Start && $self->has_S1End && $self->has_S2Start && $self->has_S2End && !($self->Type eq "Trans")){
+	if($self->has_SChr && $self->has_S1Start && $self->has_S1End && $self->has_S2Start && $self->has_S2End && !($self->Type =~ m/Trans/)){
 		my $start; my $end;
 		my @coords = ($self->S1Start, $self->S1End, $self->S2Start, $self->S2End);
 		@coords = sort{$a <=> $b} @coords;
@@ -354,12 +363,14 @@ sub DetermineFilled{
 
 sub DetermineType{
 	my $self = shift(@_);
+	my $isClip = shift(@_);
 	
 	if(!$self->has_Type){
+		my $typestr = ($isClip)? "Clip_" : "";
 		if($self->has_SChr && $self->has_S1Start && $self->has_S1End && $self->has_S2Start && $self->has_S2End){
-			$self->Type("Closed");
+			$self->Type($typestr . "Closed");
 		}else{
-			$self->Type("Open");
+			$self->Type($typestr . "Open");
 		}
 	}
 }
