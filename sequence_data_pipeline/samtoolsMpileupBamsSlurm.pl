@@ -12,7 +12,7 @@ use Cwd;
 
 my %opts;
 my $processChunks = 1000000; # 1 megabase chunks for variant calling
-my @modules = ("samtools/1.3-20-gd49c73b", "bcftools/1.6");
+my @modules = ("samtools/1.9", "bcftools/1.9");
 my $usage = "perl $0 -b <base outfolder name> -s <OPTIONAL: ref sections for variant calling in UCSC format> -t <input newline separted bam files> -f <input reference fasta file> -m <boolean: generate and queue merger scripts>\n";
 getopt('btf', \%opts);
 

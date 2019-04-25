@@ -27,6 +27,7 @@ while(<STDIN>)
 
 my $ct = scalar(@data);
 print STDOUT "total\t$ct\n";
+print STDOUT "Sum:\t$sum\n";
 print STDOUT "Minimum\t", $data[0],     "\n";
 print STDOUT "Maximum\t", $data[$ct-1], "\n";
 #print STDOUT "Average\t", ($sum/$ct),   "\n";
