@@ -98,7 +98,9 @@ my $counter = 1;
 while(my $line = <$IN>){
         chomp $line;
         my @segs = split(/\t/, $line);
-        $probes{$segs[0]} = [$counter];
+        # For some reason, my leftjoin of the files introduced a weird bug for the LD 80k!
+        my $snp = ($segs[0] eq "LD-Porcine80K_WU_10")? $segs[1] : $segs[0];
+        $probes{$snp} = [$counter];
         $counter++;
         foreach my $id (qw(ROS SS10 MARC)){
         	my $num = $tabfields{$id};
@@ -107,7 +109,7 @@ while(my $line = <$IN>){
         		# Catch unplaced chromosomes and put them in the "other" category for sorting
         		$segs[$num] = "other";
         	}
-        	push(@{$datasets{$id}}, [$segs[0], $segs[$num], $segs[$num + 1]]);
+        	push(@{$datasets{$id}}, [$snp, $segs[$num], $segs[$num + 1]]);
         }
         
         #push(@{$datasets{"ROS"}}, [$segs[0], $segs[3], $segs[4]]);
