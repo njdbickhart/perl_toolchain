@@ -117,7 +117,7 @@ while(my $line = <$IN>){
         my @segs = split(/\t/, $line);
         # For some reason, my leftjoin of the files introduced a weird bug for the LD 80k!
         # my $snp = ($segs[0] eq "LD-Porcine80K_WU_10")? $segs[1] : $segs[0];
-        $probes{$snp} = [$counter];
+        $probes{$segs[0]} = [$counter];
         $counter++;
         foreach my $id (qw(ROS SS10 MARC)){
         	my $num = $tabfields{$id};
