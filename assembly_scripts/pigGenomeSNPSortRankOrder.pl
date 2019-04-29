@@ -1,16 +1,18 @@
 #!/usr/bin/perl
 # This script ranks SNP probes from the different assemblies in order of their supposed position on the chromosomes
 # Alt haplotypes and unmapped probes are precluded from analysis by ranking as -1
+# 4/29/2019: "correct" for inverted chromosomes in USDA MARC if a flag is set on the command line
 
 use strict;
-my $usage = "perl $0 <input tab files> <output ranking file>\n";
+my $usage = "perl $0 <input tab files> <output ranking file> <flag: 'correct' for USMARC orientations>\n";
 
-unless(scalar(@ARGV) == 2){
+unless(scalar(@ARGV) >= 2){
         print $usage;
         exit;
 }
 
 chomp(@ARGV);
+my $correct = ($ARGV[2] eq "correct")? 1 : 0;
 
 my %ss10 = (
 "NC_010461.4" => 19,
@@ -60,7 +62,7 @@ my %ros = (
 
 my %marc = (
 "CM009104.1" => 19,
-"NPJO01000144.1" => 20,
+"CM009105.1" => 20,
 "CM009086.1" => 1,
 "CM009087.1" => 2,
 "CM009088.1" => 3,
@@ -81,6 +83,21 @@ my %marc = (
 "CM009103.1" => 18, 
 "other" => 21);
 
+my %inv = (
+"CM009086.1" => 281083304,
+"CM009090.1" => 104718550,
+"CM009091.1" => 165716521,
+"CM009092.1" => 125836854,
+"CM009093.1" => 138564769,
+"CM009094.1" => 138217737,
+"CM009095.1" => 72391719,
+"CM009096.1" => 79431258,
+"CM009098.1" => 205146100,
+"CM009099.1" => 140945983,
+"CM009100.1" => 142113270,
+"CM009101.1" => 79218136,
+"CM009105.1" => 36677040);
+
 # OK, so the file columns should be: 0. probe, 1. refchr, 2. refpos, 3. rchr, 4. rpos, 5. schr, 6. spos, 7. mchr, 8. mpos
 my %sorter = (
         "ROS" => \%ros,
@@ -99,7 +116,7 @@ while(my $line = <$IN>){
         chomp $line;
         my @segs = split(/\t/, $line);
         # For some reason, my leftjoin of the files introduced a weird bug for the LD 80k!
-        my $snp = ($segs[0] eq "LD-Porcine80K_WU_10")? $segs[1] : $segs[0];
+        # my $snp = ($segs[0] eq "LD-Porcine80K_WU_10")? $segs[1] : $segs[0];
         $probes{$snp} = [$counter];
         $counter++;
         foreach my $id (qw(ROS SS10 MARC)){
@@ -108,6 +125,10 @@ while(my $line = <$IN>){
         	if(!exists($key{$segs[$num]})){
         		# Catch unplaced chromosomes and put them in the "other" category for sorting
         		$segs[$num] = "other";
+        	}
+        	if($correct && $id eq "MARC" && exists($inv{$segs[$num]})){
+        		# Invert coordinates for chromosomes that are inverted
+        		$segs[$num + 1] = $inv{$segs[$num]} - $segs[$num + 1];
         	}
         	push(@{$datasets{$id}}, [$snp, $segs[$num], $segs[$num + 1]]);
         }
