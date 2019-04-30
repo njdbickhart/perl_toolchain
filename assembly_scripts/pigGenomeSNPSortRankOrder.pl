@@ -130,7 +130,7 @@ while(my $line = <$IN>){
         		# Invert coordinates for chromosomes that are inverted
         		$segs[$num + 1] = $inv{$segs[$num]} - $segs[$num + 1];
         	}
-        	push(@{$datasets{$id}}, [$snp, $segs[$num], $segs[$num + 1]]);
+        	push(@{$datasets{$id}}, [$segs[0], $segs[$num], $segs[$num + 1]]);
         }
         
         #push(@{$datasets{"ROS"}}, [$segs[0], $segs[3], $segs[4]]);
